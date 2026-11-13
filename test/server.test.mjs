@@ -187,6 +187,22 @@ test("接続が無い・ファイルの名前が外を指す・読めないア�
   } finally { d.cleanup(); }
 });
 
+test("profile を起動の設定で固定すると、引数で別の profile を選べない", { skip }, async () => {
+  const d = makeDirs();
+  const k = fakeKintone();
+  try {
+    writeFileSync(d.conn, JSON.stringify({ defaultProfile: "prod", profiles: { dev: { baseUrl: "https://dev-x.cybozu.com", tokenMap: { APP100: "token-100" } }, prod: { baseUrl: "https://x.cybozu.com", tokenMap: { APP100: "prod-token" } } } }), { mode: 0o600 });
+    const { call, close } = await connect({ PCA_WORKSPACE: d.ws, AGGREGATE_PLUGIN_ZIP: ZIP, PCA_KINTONE_CONFIG: d.conn, PCA_KINTONE_PROFILE: "dev" }, { fetch: k.fetch });
+    assert.equal((await call("agg_status")).kintone.fixedProfile, "dev");
+    const denied = await call("agg_fields", { app: 100, profile: "prod" });
+    assert.deepEqual([denied.status, denied.code], ["denied", "profile-fixed"]);
+    const ok = await call("agg_fields", { app: 100, preview: true });
+    assert.deepEqual([ok.status, ok.profile], ["ok", "dev"], "省略すると、defaultProfile（prod）ではなく固定した profile");
+    assert.equal(k.calls.length > 0, true);
+    await close();
+  } finally { d.cleanup(); }
+});
+
 test("ビルドした本体を起動して、状態・資料・ファイルの操作が通る（標準出力は JSON-RPC だけ）", { skip: skip || (existsSync(path.join(HERE, "../dist/server/index.cjs")) ? false : "dist が無い（npm run build）") }, async () => {
   const d = makeDirs();
   try {

@@ -9,6 +9,7 @@
  *   環境変数 <製品>_PLUGIN_ZIP   プラグインの zip（アプリ集計は AGGREGATE_PLUGIN_ZIP）。計算式エンジンと authoring API をここから読む
  *   環境変数 PCA_WORKSPACE       作業フォルダー（省略時は起動したフォルダー）。読み書きするのは、この直下の *.json だけ
  *   環境変数 PCA_KINTONE_CONFIG  kintone の接続のファイル（kSQL の ksql.config.json と同じ形。**作業フォルダーの外**に置く）
+ *   環境変数 PCA_KINTONE_PROFILE 使う profile を 1 つに固定する（省略すると、ツールの引数か defaultProfile）。固定すると、AI はほかの profile を選べない
  *
  * 守ること:
  *   - kintone へは **GET だけ**（項目定義・アプリの名前。レコードは読まない）。書くのは作業フォルダーの中だけ
@@ -49,8 +50,12 @@ const settingPath = (v: string): string => {
   return p === "~" ? os.homedir() : /^~[\\/]/.test(p) ? path.join(os.homedir(), p.slice(2)) : p;
 };
 
+/** 起動の設定で固定した profile と違う profile を渡された */
+class ProfileFixedError extends Error {}
+
 /** 誤りを、応答の形にする（種類の分かる誤りは status と code に。分からないものは文だけ） */
 function failure(e: unknown): ToolResult {
+  if (e instanceof ProfileFixedError) return json({ status: "denied", code: "profile-fixed", message: e.message });
   if (e instanceof G.GenericFileError) return json({ status: e.status, message: e.message });
   if (e instanceof G.SourceError) return json({ status: "invalid", code: "source", message: e.message });
   if (e instanceof G.UnknownPluginError) return json({ status: "invalid", code: "plugin", message: e.message });
@@ -73,6 +78,7 @@ export function createServer(opt: ServerOptions): McpServer {
   const workspace = path.resolve(isUnset(opt.env.PCA_WORKSPACE) ? opt.cwd : settingPath(opt.env.PCA_WORKSPACE as string));
   const zip = isUnset(opt.env[plugin.zipEnv]) ? undefined : path.resolve(settingPath(opt.env[plugin.zipEnv] as string));
   const connFile = isUnset(opt.env.PCA_KINTONE_CONFIG) ? undefined : settingPath(opt.env.PCA_KINTONE_CONFIG as string);
+  const fixedProfile = isUnset(opt.env.PCA_KINTONE_PROFILE) ? undefined : (opt.env.PCA_KINTONE_PROFILE as string).trim();
   // 束ねた本体の隣に Worker の入口、1 つ上に vendor/（build.mjs）。ソースから動かすときは中核の既定を使う
   const workerFile = opt.here && existsSync(path.join(opt.here, "generic-worker.mjs")) ? path.join(opt.here, "generic-worker.mjs") : undefined;
   const momentFile = opt.here && existsSync(path.join(opt.here, "..", "vendor", "moment-with-locales.min.js")) ? path.join(opt.here, "..", "vendor", "moment-with-locales.min.js") : undefined;
@@ -84,7 +90,9 @@ export function createServer(opt: ServerOptions): McpServer {
   /** kintone の接続（呼び出しのたびに接続のファイルを読む。アプリごとに、その profile のそのアプリの認証で作る） */
   const kintone = (profile: string | undefined): { clientFor: G.GenericClientFor; def: G.ProfileDef; set: G.ConnectionSet } => {
     const set = G.loadConnections(connFile, { workspaceRoots: [workspace], env: opt.env });
-    const def = G.pickProfile(set, profile);
+    // 起動の設定で profile が固定されていれば、それだけを使う（引数で別の profile を渡されたら断る。本番の接続を AI に選ばせない）
+    if (fixedProfile && profile !== undefined && profile !== fixedProfile) throw new ProfileFixedError(`この MCP は profile「${fixedProfile}」に固定されている（起動の設定）。profile の引数は省略する`);
+    const def = G.pickProfile(set, fixedProfile ?? profile);
     return { set, def, clientFor: (appId) => G.createRestClient(G.authFor(set, def, appId), ...(opt.fetch ? [opt.fetch] : [])) };
   };
 
@@ -127,7 +135,7 @@ export function createServer(opt: ServerOptions): McpServer {
       }
       try {
         const set = G.loadConnections(connFile, { workspaceRoots: [workspace], env: opt.env });
-        out.kintone = { status: "ok", file: set.fileName, defaultProfile: set.defaultProfile ?? null, profiles: [...set.profiles.values()].map((p) => ({ profile: p.profile, auth: p.auth, guestSpaceId: p.guestSpaceId ?? null, tokenApps: p.tokenApps })), invalid: set.invalid };
+        out.kintone = { status: "ok", file: set.fileName, defaultProfile: set.defaultProfile ?? null, fixedProfile: fixedProfile ?? null, profiles: [...set.profiles.values()].map((p) => ({ profile: p.profile, auth: p.auth, guestSpaceId: p.guestSpaceId ?? null, tokenApps: p.tokenApps })), invalid: set.invalid };
       } catch (e) {
         // 接続が無くても、設定ファイルを作る・直すことはできる。項目定義・検査・取り込み用のファイルは使えない
         out.status = "problem";

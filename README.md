@@ -27,6 +27,7 @@ rex0220 の kintone プラグイン（計算式エンジンを使うもの）の
 | 環境変数 `AGGREGATE_PLUGIN_ZIP` | アプリ集計プラグインの zip（アプリに入れたものと同じ版） |
 | 環境変数 `PCA_WORKSPACE` | 作業フォルダー（省略時は起動したフォルダー）。読み書きするのは、この直下の `*.json` だけ |
 | 環境変数 `PCA_KINTONE_CONFIG` | kintone の接続のファイル（kSQL の `ksql.config.json` と同じ形）。**作業フォルダーの外**に置く。API トークンは閲覧だけでよい |
+| 環境変数 `PCA_KINTONE_PROFILE` | 使う profile を 1 つに固定する（省略すると、ツールの引数か `defaultProfile`）。固定すると、AI はほかの profile を選べない |
 
 ## ツール（アプリ集計）
 
