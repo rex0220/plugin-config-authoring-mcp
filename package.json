@@ -1,0 +1,25 @@
+{
+  "name": "@rex0220/plugin-config-authoring-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "rex0220 の kintone プラグイン（計算式エンジンを使うもの。最初はアプリ集計）の設定を AI が作るための MCP。製品ごとの名前で起動する（--plugin aggregate → agg_*）",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "node build.mjs && node --test \"test/**/*.test.mjs\""
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@rex0220/formula-authoring-tools": "file:../formula-authoring/tools",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "happy-dom": "20.14.5",
+    "typescript": "^5.6.0",
+    "zod": "3.25.76"
+  }
+}
