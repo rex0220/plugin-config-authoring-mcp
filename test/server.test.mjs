@@ -187,13 +187,46 @@ test("接続が無い・ファイルの名前が外を指す・読めないア�
   } finally { d.cleanup(); }
 });
 
+test("取り込み用のファイル: 検査（kintone の読み取り）の間に設定ファイルが直されたら作らない。自アプリの番号を式の評価に渡す", { skip }, async () => {
+  const d = makeDirs();
+  const k = fakeKintone();
+  try {
+    let onTargetRead = () => {};
+    const fetch = async (url, init) => { if (new URL(url).pathname.endsWith("/app/form/fields.json") && !url.includes("/preview/")) onTargetRead(); return k.fetch(url, init); };
+    const { call, close } = await connect({ PCA_WORKSPACE: d.ws, AGGREGATE_PLUGIN_ZIP: ZIP, PCA_KINTONE_CONFIG: d.conn }, { fetch });
+    assert.equal((await call("agg_status")).kintone.profileSelection, "tool-selectable", "固定していないときは、そうと分かる");
+    const made = await call("agg_new", { file: "a.json", app: 100, appName: "集計先" });
+    const tpl = (await call("agg_read", { file: "a.json", key: "new" })).row;
+    // 式は自アプリの番号と利用者に依るもの（代役の利用者でも検査は通る）
+    const row = { ...tpl, name: "受注の合計", app: { id: "", fcode: "得意先LU" }, filters: [{ state: true, field: "顧客", cond: "=", value: "得意先CD" }], fields: [{ state: true, to: "合計", summary: "sum", formula: "金額", init: true, editable: false }] };
+    const added = await call("agg_update", { file: "a.json", expectedDigest: made.digest, ops: [{ op: "addRow", row }, { op: "patchCommon", patch: { executeCondition: { state: true, enabled: true, formula: 'UINFO("code") != ""' } } }] });
+    assert.equal(added.status, "saved");
+    const c = await call("agg_check", { file: "a.json" });
+    assert.deepEqual([c.status, c.issues], ["ok", []]);
+    // 検査の途中（対象アプリの項目定義を読むところ）で、ほかの書き込みが設定ファイルを直す
+    const file = path.join(d.ws, "a.json");
+    onTargetRead = () => { const v = JSON.parse(readFileSync(file, "utf8")); v.source.rows[0].name = "途中で直した"; writeFileSync(file, JSON.stringify(v, null, 2) + "\n"); onTargetRead = () => {}; };
+    const ex = await call("agg_export", { file: "a.json", expectedDigest: c.digest });
+    assert.equal(ex.status, "conflict", "読んだときは同じ digest でも、置く直前に確かめ直して止める");
+    assert.deepEqual(readdirSync(d.ws), ["a.json"], "取り込み用のファイルもロックも残らない");
+    // 直された後のものを検査し直せば作れる
+    const c2 = await call("agg_check", { file: "a.json" });
+    assert.notEqual(c2.digest, c.digest);
+    const ok = await call("agg_export", { file: "a.json", expectedDigest: c2.digest });
+    assert.equal(ok.status, "saved");
+    assert.equal(JSON.parse(readFileSync(path.join(d.ws, ok.importFile), "utf8")).pluginInfos[0].name, "途中で直した");
+    await close();
+  } finally { d.cleanup(); }
+});
+
 test("profile を起動の設定で固定すると、引数で別の profile を選べない", { skip }, async () => {
   const d = makeDirs();
   const k = fakeKintone();
   try {
     writeFileSync(d.conn, JSON.stringify({ defaultProfile: "prod", profiles: { dev: { baseUrl: "https://dev-x.cybozu.com", tokenMap: { APP100: "token-100" } }, prod: { baseUrl: "https://x.cybozu.com", tokenMap: { APP100: "prod-token" } } } }), { mode: 0o600 });
     const { call, close } = await connect({ PCA_WORKSPACE: d.ws, AGGREGATE_PLUGIN_ZIP: ZIP, PCA_KINTONE_CONFIG: d.conn, PCA_KINTONE_PROFILE: "dev" }, { fetch: k.fetch });
-    assert.equal((await call("agg_status")).kintone.fixedProfile, "dev");
+    const st = (await call("agg_status")).kintone;
+    assert.deepEqual([st.fixedProfile, st.profileSelection], ["dev", "locked"]);
     const denied = await call("agg_fields", { app: 100, profile: "prod" });
     assert.deepEqual([denied.status, denied.code], ["denied", "profile-fixed"]);
     const ok = await call("agg_fields", { app: 100, preview: true });

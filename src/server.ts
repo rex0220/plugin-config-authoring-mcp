@@ -83,9 +83,13 @@ export function createServer(opt: ServerOptions): McpServer {
   const workerFile = opt.here && existsSync(path.join(opt.here, "generic-worker.mjs")) ? path.join(opt.here, "generic-worker.mjs") : undefined;
   const momentFile = opt.here && existsSync(path.join(opt.here, "..", "vendor", "moment-with-locales.min.js")) ? path.join(opt.here, "..", "vendor", "moment-with-locales.min.js") : undefined;
 
-  /** プラグインの API を呼ぶ（Worker。出力は捨てる） */
-  const call: G.GenericCaller = (method, args) =>
-    G.callGeneric({ plugin: plugin.name, zip, method, args, ...(momentFile ? { momentFile } : {}) }, { ...(workerFile ? { workerFile } : {}), captureOutput: () => undefined });
+  /**
+   * プラグインの API を呼ぶ（Worker。出力は捨てる）。自アプリの番号が分かっているときは、式の評価の文脈に渡す（kintone.app.getId() がその番号を返す）。
+   * 利用者・組織・グループの情報は渡さない（検査は式の形と使う項目だけを見て、値は使わない。UINFO などは代役の利用者で評価される）
+   */
+  const callFor = (ownAppId?: number): G.GenericCaller => (method, args) =>
+    G.callGeneric({ plugin: plugin.name, zip, method, args, ...(ownAppId ? { context: { ownAppId } } : {}), ...(momentFile ? { momentFile } : {}) }, { ...(workerFile ? { workerFile } : {}), captureOutput: () => undefined });
+  const call = callFor();
 
   /** kintone の接続（呼び出しのたびに接続のファイルを読む。アプリごとに、その profile のそのアプリの認証で作る） */
   const kintone = (profile: string | undefined): { clientFor: G.GenericClientFor; def: G.ProfileDef; set: G.ConnectionSet } => {
@@ -135,7 +139,7 @@ export function createServer(opt: ServerOptions): McpServer {
       }
       try {
         const set = G.loadConnections(connFile, { workspaceRoots: [workspace], env: opt.env });
-        out.kintone = { status: "ok", file: set.fileName, defaultProfile: set.defaultProfile ?? null, fixedProfile: fixedProfile ?? null, profiles: [...set.profiles.values()].map((p) => ({ profile: p.profile, auth: p.auth, guestSpaceId: p.guestSpaceId ?? null, tokenApps: p.tokenApps })), invalid: set.invalid };
+        out.kintone = { status: "ok", file: set.fileName, defaultProfile: set.defaultProfile ?? null, fixedProfile: fixedProfile ?? null, profileSelection: fixedProfile ? "locked" : "tool-selectable", profiles: [...set.profiles.values()].map((p) => ({ profile: p.profile, auth: p.auth, guestSpaceId: p.guestSpaceId ?? null, tokenApps: p.tokenApps })), invalid: set.invalid };
       } catch (e) {
         // 接続が無くても、設定ファイルを作る・直すことはできる。項目定義・検査・取り込み用のファイルは使えない
         out.status = "problem";
@@ -331,7 +335,7 @@ export function createServer(opt: ServerOptions): McpServer {
   const runCheck = async (file: string, profile: string | undefined): Promise<{ read: G.ReadSourceResult; result: G.GenericCheckResult; profile: string; guestSpaceId: number | null }> => {
     const read = G.readSourceFile(workspace, file);
     const k = kintone(profile);
-    const result = await G.checkSource(k.clientFor, call, read.file.source, { app: read.file.appId, ...(k.def.guestSpaceId ? { guestSpaceId: k.def.guestSpaceId } : {}) });
+    const result = await G.checkSource(k.clientFor, callFor(read.file.appId), read.file.source, { app: read.file.appId, ...(k.def.guestSpaceId ? { guestSpaceId: k.def.guestSpaceId } : {}) });
     return { read, result, profile: k.def.profile, guestSpaceId: k.def.guestSpaceId ?? null };
   };
   const EVALUATION_NOTE = "式は架空のレコードで評価した（文法と、項目があるかまで）。実データでの値・分岐は確かめていない";
@@ -371,7 +375,8 @@ export function createServer(opt: ServerOptions): McpServer {
         if (errors.length > 0 || !result.body) return json({ status: "has-errors", file: read.name, issues: result.issues, notes: result.notes, message: "error を直してからやり直す（取り込み用のファイルは作っていない）" });
         const text = (await call("writeEnvelope", [{ appId: read.file.appId, appName: read.file.appName }, result.body])) as string;
         const name = G.importFileName(plugin.name, read.file.appId);
-        const w = G.saveNewImportFile(workspace, name, text);
+        // 検査（kintone の読み取りを挟む）の間に設定ファイルが直されていないかを、置く直前に、設定ファイルのロックの中で確かめ直す
+        const w = G.saveNewImportFileFor(workspace, read.name, read.digest, name, text);
         return json({
           status: w.status, importFile: w.name, from: read.name, appId: read.file.appId, profile: used, issues: result.issues, notes: result.notes, warnings: w.warnings, evaluation: EVALUATION_NOTE,
           nextSteps: nextSteps(plugin.name, w.name, read.file.appId, result.issues.some((x) => x.severity === "warning"))

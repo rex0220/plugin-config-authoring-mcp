@@ -11,7 +11,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GENERIC_PLUGINS } from "@rex0220/formula-authoring-tools/generic";
 import { forbiddenReasons, realHosts, repoProblems } from "../scripts/forbidden-files.mjs";
-import { mcpJson, pluginJson, productNames, productOf, zipName } from "../scripts/products.mjs";
+import { MARKETPLACE_NAME, mcpJson, pluginJson, productMismatch, productNames, productOf, REPO_URL, zipName } from "../scripts/products.mjs";
+import { marketplace } from "../scripts/write-marketplace.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -48,6 +49,11 @@ test("製品ごとの定義: 中核の表にある製品だけを、製品の名
     assert.equal(zipName(name, "1.2.3"), `${name}-authoring-plugin-1.2.3.zip`);
   }
   assert.throws(() => productOf("formula"), /製品の定義が無い/);
+  // 中核の表と配布の定義は同じ製品を持つ（片方だけに足すと、その製品が配布と試験から黙って消える）
+  assert.deepEqual(productMismatch(), []);
+  assert.deepEqual(names.slice().sort(), Object.keys(GENERIC_PLUGINS).sort());
+  assert.equal(productMismatch({ aggregate: {}, "data-generator": {} }, { aggregate: {} }).length, 1, "中核にだけある製品");
+  assert.equal(productMismatch({ aggregate: {} }, { aggregate: {}, extra: {} }).length, 1, "配布の定義にだけある製品");
 });
 
 test("フック: モジュールがあり、設定ファイルの印が中核と同じ", async () => {
@@ -59,4 +65,28 @@ test("フック: モジュールがあり、設定ファイルの印が中核と
   const kind = src.match(/SOURCE_MARK = \/"kind"\\s\*:\\s\*"([\w-]+)"\//)?.[1];
   assert.equal(kind, "rex0220-authoring-source");
   assert.ok(tools.includes(`"${kind}"`), "中核の SOURCE_FILE_KIND と同じ");
+});
+
+test("marketplace: 製品ごとのプラグインを並べ、リリースの zip を sha256 で固定して指す（版は書かない）", () => {
+  const sha256 = "0".repeat(64);
+  const m = marketplace(productNames().map((name) => ({ plugin: pluginJson(name, "1.2.3"), sha256 })));
+  assert.equal(m.name, MARKETPLACE_NAME);
+  assert.deepEqual(m.plugins.map((p) => p.name), productNames());
+  for (const p of m.plugins) {
+    assert.deepEqual(p.source, { source: "archive", url: `${REPO_URL}/releases/download/v1.2.3/${p.name}-authoring-plugin-1.2.3.zip`, sha256 });
+    assert.equal(p.version, undefined, "版は plugin.json だけに書く");
+    assert.equal(p.userConfig, undefined, "利用者の設定は写さない");
+    assert.ok(p.description.includes(productOf(p.name).title));
+  }
+});
+
+test("互換表（README）が中核の表と合う", () => {
+  const readme = readFileSync(path.join(root, "README.md"), "utf8");
+  for (const name of productNames()) {
+    const core = GENERIC_PLUGINS[name];
+    const row = readme.split(/\r?\n/).find((l) => l.startsWith("|") && l.includes(`（\`${name}\`）`));
+    assert.ok(row, `互換表に ${name} の行がある`);
+    const cells = row.split("|").map((c) => c.trim());
+    assert.deepEqual([cells[1], cells[2], cells[3], cells[4]], [`${core.title}（\`${name}\`）`, `\`${core.toolPrefix}_*\``, `Ver.${core.minPluginVersion} 以降`, core.contractVersions.join("、")]);
+  }
 });

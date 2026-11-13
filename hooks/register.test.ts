@@ -12,6 +12,12 @@ const FILES: Record<string, string | null> = {
   '/ws/rex0220-aggregate-records-app1001-20261113-112413.json': DOWNLOAD,
   '/ws/aggregate-app1001-20261113-120000-import.json': DOWNLOAD,
   '/ws/package.json': '{"name":"x","version":"1.0.0"}',
+  '/ws/crlf.json': '{\r\n  "name": "x",\r\n  "version": "1.0.0"\r\n}\r\n',
+  // 値の中に印の文字があるだけの、関係のない JSON（試験の材料など）
+  '/ws/fixture.json': '{"cases":[{"kind":"rex0220-authoring-source"},{"pluginID":"rex0220 aggregate records plugin"}],"note":"\\"kind\\": \\"rex0220-authoring-source\\""}',
+  // 印の手前まで書いてある JSON（もう 1 回の編集で設定ファイルになる）
+  '/ws/half.json': '{"kind":"rex0220-authoring-sour","plugin":"aggregate","appId":1001,"source":{"common":{},"rows":[]}}',
+  '/ws/halfbroken.json': '{"kind":"rex0220-authoring-',
   '/ws/broken.json': null, // 読めないファイル
   '/ws/src/x.ts': 'export {}',
   '/ws/sub/agg-1001.json': SOURCE,
@@ -69,7 +75,7 @@ function engine(on: any, { session = '/ws', brokenRoot = false, brokenList = fal
 const isDenied = (r: any) => r?.deny !== undefined || r?.isError === true
 const denyText = (r: any) => String(r?.deny ?? r?.text ?? '')
 const write = ($: any, file_path: string, content: string) => $.tool.call({ tool: 'Write', file_path, content } as any)
-const edit = ($: any, file_path: string, new_string = 'b') => $.tool.call({ tool: 'Edit', file_path, old_string: 'a', new_string } as any)
+const edit = ($: any, file_path: string, new_string = 'b', old_string = 'a', replace_all = false) => $.tool.call({ tool: 'Edit', file_path, old_string, new_string, replace_all } as any)
 
 describe('直接の Write / Edit を止める（作業フォルダーの直下の *.json を中身で見分ける）', () => {
   test('設定ファイルへの Edit と Write を拒否し、設定のツールを案内する', async ($, on) => {
@@ -86,8 +92,49 @@ describe('直接の Write / Edit を止める（作業フォルダーの直下�
     const r = await write($, '/ws/new.json', SOURCE)
     expect(isDenied(r)).toBe(true)
     expect(denyText(r)).toMatch(/_new/)
-    expect(isDenied(await edit($, '/ws/package.json', '"kind": "rex0220-authoring-source"'))).toBe(true)
+    // いちばん上の kind を、Edit で設定ファイルの印にする
+    expect(isDenied(await edit($, '/ws/package.json', '{"kind":"rex0220-authoring-source","name"', '{"name"'))).toBe(true)
     expect(reached.length).toBe(0)
+  })
+
+  test('文字の並びを変えた書き方（\\u のエスケープ、空白・改行、BOM）でも、JSON の値で見分けて拒否する', async ($, on) => {
+    const reached = engine(on)
+    for (const content of [
+      '{"kind":"rex0220-authoring-sourc\\u0065","plugin":"aggregate","appId":1,"source":{"common":{},"rows":[]}}',
+      '{"\\u006bind":"rex0220-authoring-source"}',
+      '{\n  "kind"\n:\n"rex0220-authoring-source"}',
+      '\uFEFF{"kind":"rex0220-authoring-source"}',
+      '{"pluginID":"rex0220\\u0020aggregate records plugin","pluginInfos":[]}',
+      '{"kind":"x","kind":"rex0220-authoring-source"}', // 同じキーが 2 回（後が勝つ。ツールと同じ読み方）
+    ]) {
+      expect(isDenied(await write($, '/ws/new.json', content))).toBe(true)
+    }
+    // 読めない JSON（書きかけ）でも、印があれば置かせない（後の編集で直せば設定ファイルになる）
+    expect(isDenied(await write($, '/ws/new.json', '{"kind":"rex0220-authoring-sourc\\u0065",'))).toBe(true)
+    expect(reached.length).toBe(0)
+  })
+
+  test('印を 2 回の編集に分けて作っても、出来上がる編集で拒否する（Edit は編集の後の全文で見る）', async ($, on) => {
+    const reached = engine(on)
+    // new_string だけを見ると印が無い（"ce" の 2 文字）が、当てた後の全文は設定ファイルになる
+    expect(isDenied(await edit($, '/ws/half.json', 'authoring-source', 'authoring-sour'))).toBe(true)
+    expect(isDenied(await edit($, '/ws/halfbroken.json', 'authoring-source","source":{"common":{},"rows":[]}}', 'authoring-'))).toBe(true)
+    // replace_all でも同じ
+    expect(isDenied(await edit($, '/ws/half.json', 'sourc', 'sour', true))).toBe(false) // "sourc" では印にならない
+    expect(isDenied(await edit($, '/ws/half.json', 'source', 'sour', true))).toBe(true)
+    expect(reached.length).toBe(1)
+  })
+
+  test('置き換えを再現できない Edit は拒否する（fail-closed）。改行だけ違う書き方は LF にそろえて当てる', async ($, on) => {
+    const reached = engine(on)
+    const r = await edit($, '/ws/package.json', 'y', 'ここには無い文字')
+    expect(isDenied(r)).toBe(true)
+    expect(denyText(r)).toMatch(/再現できない/)
+    expect(isDenied(await edit($, '/ws/package.json', 'y', ''))).toBe(true) // old_string が空
+    // ファイルは CRLF、old_string は LF
+    expect(isDenied(await edit($, '/ws/crlf.json', '"name": "y",\n  "version"', '"name": "x",\n  "version"'))).toBe(false)
+    expect(isDenied(await edit($, '/ws/crlf.json', '"kind": "rex0220-authoring-source",\n  "version"', '"name": "x",\n  "version"'))).toBe(true)
+    expect(reached.length).toBe(1)
   })
 
   test('取り込み用のファイル（-import.json）と設定画面のダウンロードを拒否する', async ($, on) => {
@@ -132,6 +179,12 @@ describe('直接の Write / Edit を止める（作業フォルダーの直下�
       await edit($, '/ws/sub/agg-1001.json'), // 直下でない（作業フォルダーのファイルではない）
       await edit($, '/other/agg-1001.json'), // セッションのフォルダーの外
       await write($, '/ws/notes.md', SOURCE), // *.json でない
+      // 値の中に印の文字があるだけの JSON（いちばん上の kind / pluginID ではない）
+      await edit($, '/ws/fixture.json', 'cases2', 'cases'),
+      await write($, '/ws/fixture2.json', '{"cases":[{"kind":"rex0220-authoring-source"}],"pluginId":"rex0220 x","kind":"other"}'),
+      await write($, '/ws/list.json', '[{"kind":"rex0220-authoring-source"}]'),
+      await write($, '/ws/other-plugin.json', '{"pluginID":"someone else plugin"}'),
+      await edit($, '/ws/none.json'), // 無いファイルへの Edit（道具の側で失敗する）
     ]
     for (const r of passes) expect(isDenied(r)).toBe(false)
     expect(reached.length).toBe(passes.length)

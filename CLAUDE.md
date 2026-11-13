@@ -16,12 +16,14 @@
 - 標準出力は JSON-RPC だけ（Worker の出力は捨てる）
 - 資料（`guide/`）は、プラグインの「設定の説明」（`help.ts`）と authoring API のコードを読んで書く。**設定画面で選べる値の範囲は、dialog のコードで確かめる**（実データに無い値を見落とす。OR 条件の位置を 2 値に丸めていた例）
 - 試験で起動したサーバーは必ず閉じる（閉じないと試験が終わらない）
+- 取り込み用のファイルは `saveNewImportFileFor` で置く（設定ファイルのロックの中で digest を確かめ直す。検査は kintone の読み取りを挟むので、その間に直されていたら作らない）
+- 式の評価に渡す文脈は自アプリの番号だけ。利用者・組織・グループの情報は渡さない（検査は式の形と使う項目だけで、値は使わない。値を使う機能〈模擬〉を足すときに渡し方を決める）
 
 ## 配布の形（Claude Code のプラグイン）
 
 - 配るのは**製品ごとのプラグイン**（アプリ集計は `aggregate`）。`.claude-plugin/plugin.json` と `.mcp.json` はリポジトリに置かず、`scripts/products.mjs` が製品ごとに作る（名前・ツールの頭・zip の環境変数・扱う版は中核の表から取る。ここに書くのは利用者に見せる文だけ）
 - `npm run verify:plugin` = ビルド → `dist-plugin/<製品>-authoring-plugin-<版>.zip` と展開した形 `dist-plugin/<製品>/` → 検査。`dist-plugin/` はコミットしない
-- フック（`hooks/register.ts`）は製品に依らず 1 つ。作業フォルダーの直下の `*.json` を**中身**（`kind`・`pluginID`）と名前（`-import.json`）で見分けて、直接の Write / Edit を止める。**fail-closed** なので、直したら `claude plugin test .`（8 件）を流す。設定ファイルの印は中核の `SOURCE_FILE_KIND` と同じ（`test/release.test.mjs` が見る）
+- フック（`hooks/register.ts`）は製品に依らず 1 つ。作業フォルダーの直下の `*.json` を**中身**（`kind`・`pluginID`）と名前（`-import.json`）で見分けて、直接の Write / Edit を止める。見分けるのは JSON として読んだいちばん上の値（文字の並びではない）、Edit は編集の後の全文。**fail-closed** なので、直したら `claude plugin test .`（11 件）を流す。設定ファイルの印は中核の `SOURCE_FILE_KIND` と同じ（`test/release.test.mjs` が見る）
 - パスを解決する助けの関数・`scripts/zip.mjs`・`forbidden-files.mjs`・`third-party-notices.mjs` は formula MCP → kSQL アクションのオーサリングからの写し（正本は formula MCP）
 - 依存を変えたら `npm run notices`（`THIRD_PARTY_NOTICES.md` を作り直す。合っていないとビルドが止まる）
 - 公開の前に `node scripts/forbidden-files.mjs --history`（履歴に本物の環境のホスト名・実案件の設定が無いこと）

@@ -8,6 +8,8 @@ import { GENERIC_PLUGINS } from "@rex0220/formula-authoring-tools/generic";
 
 export const REPO_URL = "https://github.com/rex0220/plugin-config-authoring-mcp";
 export const AUTHOR = "rex0220";
+/** marketplace（.claude-plugin/marketplace.json）の名前。入れ方は /plugin install <製品>@<この名前>。**仮の名前**（公開の前に決める） */
+export const MARKETPLACE_NAME = "rex0220-kintone-authoring";
 
 /** 利用者に見せる文（製品ごと） */
 const TEXTS = {
@@ -23,12 +25,27 @@ const TEXTS = {
 export function productOf(name) {
   const core = GENERIC_PLUGINS[name];
   const text = TEXTS[name];
-  if (!core || !text) throw new Error(`製品の定義が無い: ${name}（中核の表と scripts/products.mjs の TEXTS の両方に要る。ある名前: ${productNames().join(", ")}）`);
+  if (!core || !text) throw new Error(`製品の定義が無い: ${name}（中核の表と scripts/products.mjs の TEXTS の両方に要る。ある名前: ${Object.keys(TEXTS).join(", ")}）`);
   return { name: core.name, title: core.title, toolPrefix: core.toolPrefix, zipEnv: core.zipEnv, minPluginVersion: core.minPluginVersion, ...text };
 }
 
-/** 配布する製品の名前（中核の表とここの両方にあるもの） */
-export const productNames = () => Object.keys(TEXTS).filter((n) => GENERIC_PLUGINS[n]);
+/**
+ * 配布する製品の名前。**中核の表とここの TEXTS は同じ製品を持つ**（片方だけに書くと、その製品がビルドと試験から黙って消える）ので、
+ * ずれていれば止める（zip を作るとき・marketplace を書くとき・試験）
+ */
+export function productNames() {
+  const problems = productMismatch();
+  if (problems.length) throw new Error(`製品の定義がそろっていない:\n  ${problems.join("\n  ")}`);
+  return Object.keys(TEXTS);
+}
+
+/** 中核の表と TEXTS のずれ（無ければ空） */
+export function productMismatch(core = GENERIC_PLUGINS, texts = TEXTS) {
+  return [
+    ...Object.keys(core).filter((n) => !texts[n]).map((n) => `${n}: 中核の表にあるが、scripts/products.mjs の TEXTS に無い（配布されない）`),
+    ...Object.keys(texts).filter((n) => !core[n]).map((n) => `${n}: scripts/products.mjs の TEXTS にあるが、中核の表に無い`)
+  ];
+}
 
 export const zipName = (name, version) => `${name}-authoring-plugin-${version}.zip`;
 

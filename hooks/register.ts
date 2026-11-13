@@ -4,8 +4,12 @@
 //       設定ファイル（kind が rex0220-authoring-source。*_new / *_update から）
 //       取り込み用のファイル（名前が -import.json で終わる。*_export が検査を通ったものから作る）
 //       設定画面の［設定をダウンロード］のファイル（pluginID が rex0220 …。利用者が置く）
-//     作業フォルダーは直下に JSON を置く形なので、名前では守れない。**今の中身と、書こうとする中身**で見分ける
+//     作業フォルダーは直下に JSON を置く形なので、名前では守れない。**今の中身と、書いた後の中身**で見分ける
 //     （package.json・tsconfig.json など、関係のない JSON は止めない）
+//   - 見分けるのは、JSON として読んだ**いちばん上のオブジェクトの値**（ツールがファイルを見分けるのと同じ見方）。
+//     文字の並びでは見ない（"\u0065" のような書き方ですり抜ける。逆に、値の中に印の文字があるだけの関係のない JSON を止めてしまう）
+//   - Edit は、今の中身に置き換えを当てた**編集の後の全文**で見る（印を 2 回の編集に分けて作っても、出来上がる編集で止まる）。
+//     置き換えを再現できない Edit（今の中身に old_string が無い）は拒否する
 //   - 直下でない所、*.json でないもの、セッションのフォルダーの外は止めない
 //   - 拒否のフックは .catch で失敗を拒否にする（fail-closed）。今の中身を読めない直下の *.json も拒否する
 //   - 作業フォルダーを起動の設定（PCA_WORKSPACE）で別の所にしたときは、このフックは届かない（守るのはセッションのフォルダーだけ）
@@ -14,8 +18,11 @@ import type { EngineInterface, Register } from 'claude-code'
 type $ = EngineInterface
 
 /** 設定ファイルの印（中核の SOURCE_FILE_KIND と同じ） */
+const SOURCE_KIND = 'rex0220-authoring-source'
+/** 設定画面のダウンロード・取り込み用のファイルの印（封筒の pluginID。"rex0220 aggregate records plugin" など） */
+const ENVELOPE_ID = /^rex0220( |$)/
+/** JSON として読めない中身のときだけ使う、文字の並びの印（読めないものは安全側に倒す） */
 const SOURCE_MARK = /"kind"\s*:\s*"rex0220-authoring-source"/
-/** 設定画面のダウンロード・取り込み用のファイルの印（封筒の pluginID） */
 const ENVELOPE_MARK = /"pluginID"\s*:\s*"rex0220[ "]/
 /** 取り込み用のファイルの名前（中核の importFileName） */
 const IMPORT_NAME = /-import\.json$/i
@@ -23,8 +30,26 @@ const IMPORT_NAME = /-import\.json$/i
 const WHY_SOURCE = '設定ファイルは設定のツール（*_new で作る、*_update で直す）から保存する（digest の照合と上書きしない決まりを通す）'
 const WHY_ENVELOPE = '取り込み用のファイルは *_export が検査を通った設定から作る。設定画面のダウンロードは利用者が置くファイル（AI が作らない・直さない）'
 
-/** 中身から、守るファイルかを見分ける。守るものなら理由 */
-const whyProtected = (text: string): string | undefined => (SOURCE_MARK.test(text) ? WHY_SOURCE : ENVELOPE_MARK.test(text) ? WHY_ENVELOPE : undefined)
+/**
+ * 中身から、守るファイルかを見分ける。守るものなら理由。
+ * JSON として読めれば、いちばん上のオブジェクトの kind / pluginID の**値**で決める。
+ * 読めなければ（書きかけ・壊れた JSON）、\uXXXX を字に戻してから文字の並びで見る（後の編集で直せば守るファイルになるものを、先に置かせない）
+ */
+function whyProtected(text: string): string | undefined {
+  const body = text.replace(/^\uFEFF/, '')
+  let value: unknown
+  try {
+    value = JSON.parse(body)
+  } catch {
+    const plain = body.replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+    return SOURCE_MARK.test(plain) ? WHY_SOURCE : ENVELOPE_MARK.test(plain) ? WHY_ENVELOPE : undefined
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const top = value as Record<string, unknown>
+  if (top.kind === SOURCE_KIND) return WHY_SOURCE
+  if (typeof top.pluginID === 'string' && ENVELOPE_ID.test(top.pluginID)) return WHY_ENVELOPE
+  return undefined
+}
 
 const isWindowsPath = (p: string) => /^[A-Za-z]:[\\/]/.test(p) || /^[\\/]{2}/.test(p)
 const sepOf = (p: string) => (isWindowsPath(p) ? '\\' : '/')
@@ -72,7 +97,7 @@ const isUnder = (child: string, parent: string) => child === parent || child.sta
 export const register: Register = (on) => {
   // 直接の Write / Edit で設定ファイル・取り込み用のファイル・ダウンロードを変えない
   on('tool.call', { tool: ['Write', 'Edit'] }, async ($, e, next) => {
-    const input = e as { file_path?: unknown; content?: unknown; new_string?: unknown }
+    const input = e as { file_path?: unknown; content?: unknown; old_string?: unknown; new_string?: unknown; replace_all?: unknown }
     const filePath = String(input.file_path ?? '')
     const base = await realDir($, await $.session.root())
     if (base === undefined) return { deny: 'pca: セッションのフォルダーを解決できない' }
@@ -83,18 +108,35 @@ export const register: Register = (on) => {
     const rel = real.slice(base.length + 1).replace(/\\/g, '/')
     if (rel.includes('/') || rel.startsWith('.') || !/\.json$/i.test(rel)) return next(e) // 作業フォルダーのファイルは直下の *.json だけ
     if (IMPORT_NAME.test(rel)) return { deny: `pca: ${rel} は直接書き換えない。${WHY_ENVELOPE}` }
-    // 書こうとする中身（Write は全文、Edit は置き換える文）
-    const incoming = whyProtected(`${typeof input.content === 'string' ? input.content : ''}\n${typeof input.new_string === 'string' ? input.new_string : ''}`)
-    if (incoming) return { deny: `pca: ${rel} は直接書かない。${incoming}` }
-    // 今の中身（あれば）。読めなければ確かめられないので拒否する
-    // あるかどうかはフォルダーの一覧で見る（stat の失敗を「無い」とみなさない。一覧が取れなければ .catch で拒否）
+    // 今の中身（あれば）。あるかどうかはフォルダーの一覧で見る（stat の失敗を「無い」とみなさない。一覧が取れなければ .catch で拒否）
     const lower = rel.toLowerCase()
     const entry = (await $.fs.list(base)).find((x) => x.name.toLowerCase() === lower)
-    if (entry === undefined) return next(e) // 新しいファイルで、中身も守るものでない
-    const current = await $.fs.read(`${base}${sepOf(base)}${entry.name}`).catch(() => undefined) // 一覧にある名前で読む（大文字・小文字だけ違う書き方でも同じファイル）
-    if (typeof current !== 'string') return { deny: `pca: ${rel} の今の中身を読めないので、設定ファイルでないことを確かめられない` }
-    const existing = whyProtected(current)
-    if (existing) return { deny: `pca: ${rel} は直接書き換えない。${existing}` }
+    let current: string | undefined
+    if (entry !== undefined) {
+      // 一覧にある名前で読む（大文字・小文字だけ違う書き方でも同じファイル）。読めなければ確かめられないので拒否する
+      const text = await $.fs.read(`${base}${sepOf(base)}${entry.name}`).catch(() => undefined)
+      if (typeof text !== 'string') return { deny: `pca: ${rel} の今の中身を読めないので、設定ファイルでないことを確かめられない` }
+      const existing = whyProtected(text)
+      if (existing) return { deny: `pca: ${rel} は直接書き換えない。${existing}` }
+      current = text
+    }
+    // 書いた後の中身（Write は全文。Edit は、今の中身に置き換えを当てた全文）
+    let after: string
+    if (typeof input.old_string === 'string' || typeof input.new_string === 'string') {
+      if (current === undefined) return next(e) // 無いファイルへの Edit は、道具の側で失敗する
+      // 改行だけ違う（ファイルは CRLF、old_string は LF）書き方は、LF にそろえて当てる（見分けるのは JSON の値なので、改行は結果に関わらない）
+      const lf = (t: string) => t.replace(/\r\n/g, '\n')
+      const exact = typeof input.old_string === 'string' && input.old_string !== '' && current.includes(input.old_string)
+      const text = exact ? current : lf(current)
+      const from = typeof input.old_string === 'string' ? (exact ? input.old_string : lf(input.old_string)) : ''
+      const to = typeof input.new_string === 'string' ? (exact ? input.new_string : lf(input.new_string)) : ''
+      if (from === '' || !text.includes(from)) return { deny: `pca: ${rel} への Edit を再現できない（今の中身に old_string が無い）ので、書いた後に設定ファイルにならないことを確かめられない` }
+      after = input.replace_all === true ? text.split(from).join(to) : text.replace(from, () => to)
+    } else {
+      after = typeof input.content === 'string' ? input.content : ''
+    }
+    const incoming = whyProtected(after)
+    if (incoming) return { deny: `pca: ${rel} は直接書かない。${incoming}` }
     return next(e)
   }).catch(($, e, next) => (next.called ? next(e) : { deny: 'pca: 書き込む先の確認に失敗した' }))
 }
