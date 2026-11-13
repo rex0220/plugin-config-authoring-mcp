@@ -10,8 +10,12 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "check": "tsc --noEmit -p tsconfig.json",
-    "test": "node build.mjs && node --test \"test/**/*.test.mjs\""
+    "notices": "node build.mjs --write-notices",
+    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p hooks/tsconfig.json",
+    "test": "node build.mjs && node --test --test-timeout=120000 \"test/**/*.test.mjs\"",
+    "build:plugin": "node build.mjs && node scripts/build-plugin-zip.mjs",
+    "verify:plugin": "node build.mjs && node scripts/build-plugin-zip.mjs && node scripts/plugin-zip-verify.mjs",
+    "forbidden": "node scripts/forbidden-files.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

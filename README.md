@@ -44,6 +44,39 @@ rex0220 の kintone プラグイン（計算式エンジンを使うもの）の
 | `agg_check` | kintone の今の項目定義で検査する | kintone（GET） |
 | `agg_export` | 検査を通った設定から、設定画面の「設定をアップロード」で読むファイルを作る（上書きしない） | kintone（GET）＋ 作業フォルダー |
 
+## Claude Code のプラグインとして配る形（製品ごと）
+
+コードは 1 つですが、配るものは**製品ごとのプラグイン**です（アプリ集計は `aggregate`。ツールは `agg_*`）。プラグインの定義（`.claude-plugin/plugin.json`）と起動の設定（`.mcp.json`）はリポジトリに置かず、`scripts/products.mjs` の表から製品ごとに作ります。
+
+| 入るもの | 中身 |
+|---|---|
+| `.claude-plugin/plugin.json` | 製品の名前と、利用者の設定 4 つ（プラグインの zip、接続のファイル、使う profile、作業フォルダー。どれも秘密の値ではない） |
+| `.mcp.json` | `node ${CLAUDE_PLUGIN_ROOT}/dist/server/index.cjs --plugin <製品>`。設定は環境変数で渡す |
+| `hooks/` | 設定ファイルへの直接の書き込みを止めるフック（下） |
+| `dist/server/`・`dist/vendor/` | 本体（束ねてある）と moment |
+| `LICENSE`・`THIRD_PARTY_NOTICES.md`・`README.md` | ライセンスと、同梱の依存の著作権表示 |
+
+### フック（`hooks/register.ts`）
+
+AI が Write / Edit で作業フォルダーのファイルを直接書き換えると、digest の照合・上書きしない決まり・「取り込み用のファイルは検査を通ったものからだけ」が抜けます。フックはそれを止めます。
+
+- 見るのは、セッションのフォルダーの**直下の `*.json`** だけ。**今の中身と、書こうとする中身**で見分ける（作業フォルダーは直下に JSON を置く形なので、名前では守れない）
+  - 設定ファイル（`kind` が `rex0220-authoring-source`）→ 拒否（`*_new` / `*_update` で）
+  - 取り込み用のファイル（名前が `-import.json` で終わる）と、設定画面のダウンロード（`pluginID` が `rex0220 …`）→ 拒否
+  - `package.json` など関係のない JSON、直下でない所、セッションのフォルダーの外 → 止めない
+- 確かめられないとき（セッションのフォルダーを解決できない、一覧が取れない、今の中身を読めない）は拒否する（fail-closed）
+- 作業フォルダーを設定で別の所にしたときは届かない（守るのはセッションのフォルダー）
+
+### 作る・確かめる
+
+```sh
+npm run verify:plugin        # ビルド → 製品ごとの zip（dist-plugin/<製品>-authoring-plugin-<版>.zip）→ 検査（展開して起動、claude があれば plugin validate）
+claude plugin test .         # フックの試験（hooks/register.test.ts）
+claude --plugin-dir dist-plugin/aggregate   # 展開した形を、手元の Claude Code で試す
+```
+
+フックの型を見るには `.claude-plugin/types/`（`claude-code` の型。git に入れない。kSQL アクションのオーサリングの同じフォルダーから写せる）が要ります。marketplace と Claude Desktop（.mcpb）はまだありません。
+
 ## 作り方と試験
 
 ```
