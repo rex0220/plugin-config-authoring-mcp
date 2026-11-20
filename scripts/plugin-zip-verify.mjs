@@ -25,7 +25,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TEST_TOKEN = "TEST-not-a-real-token-0123456789"; // 本物の資格情報は使わない
 
 /** 試験に使う kintone のプラグインの zip（隣のリポジトリのビルドしたもの） */
-const TEST_ZIPS = { aggregate: "../aggregate/dist/aggregate-plugin67.zip" };
+const TEST_ZIPS = { aggregate: "../aggregate/dist/aggregate-plugin67.zip", "field-format": "../field-format/dist/field-format-plugin16.zip" };
 const testZipOf = (name) => process.env[`PCA_TEST_${name.toUpperCase().replace(/-/g, "_")}_ZIP`] ?? path.resolve(root, TEST_ZIPS[name] ?? "");
 
 function assert(cond, message) {

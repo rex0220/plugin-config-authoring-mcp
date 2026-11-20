@@ -12,6 +12,10 @@ export const DOC_LIST: Record<string, Array<{ key: string; title: string }>> = {
   aggregate: [
     { key: "howto", title: "作業手順（新しく作る・今の設定を直す・最後に伝えること）" },
     { key: "spec", title: "設定ファイルの書き方（行・行の外の設定・式を書く場所と使える項目・検査の指摘）" }
+  ],
+  "field-format": [
+    { key: "howto", title: "作業手順（新しく作る・今の設定を直す・レコードを当てて確かめる・最後に伝えること）" },
+    { key: "spec", title: "設定ファイルの書き方（項目の行・条件・色と文字・一覧別設定・式の書き方と落とし穴・検査の指摘・模擬の結果の読み方）" }
   ]
 };
 

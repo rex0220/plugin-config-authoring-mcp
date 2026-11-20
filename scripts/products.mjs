@@ -15,6 +15,9 @@ export const MARKETPLACE_NAME = "rex0220-kintone-authoring";
 const TEXTS = {
   aggregate: {
     keywords: ["kintone", "アプリ集計", "aggregate", "mcp"]
+  },
+  "field-format": {
+    keywords: ["kintone", "項目書式", "field-format", "mcp"]
   }
 };
 
