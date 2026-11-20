@@ -365,7 +365,7 @@ export function createServer(opt: ServerOptions): McpServer {
       try {
         const { read, result, profile: used } = await runCheck(file, profile);
         const errors = result.issues.filter((x) => x.severity === "error").length;
-        return json({ status: errors > 0 ? "has-errors" : result.issues.length > 0 ? "has-warnings" : "ok", file: read.name, digest: read.digest, appId: read.file.appId, profile: used, issues: result.issues, apps: result.apps, notes: result.notes, evaluation: EVALUATION_NOTE });
+        return json({ status: errors > 0 ? "has-errors" : result.issues.length > 0 ? "has-warnings" : "ok", file: read.name, digest: read.digest, appId: read.file.appId, profile: used, ...capIssues(result.issues), apps: result.apps, notes: result.notes, evaluation: EVALUATION_NOTE });
       } catch (e) {
         return failure(e);
       }
@@ -385,13 +385,13 @@ export function createServer(opt: ServerOptions): McpServer {
         const { read, result, profile: used } = await runCheck(file, profile);
         if (read.digest !== expectedDigest) return json({ status: "conflict", message: `読んだ後に設定ファイルが変わった（digest が違う）。${P}_read で読み直す`, file: read.name });
         const errors = result.issues.filter((x) => x.severity === "error");
-        if (errors.length > 0 || !result.body) return json({ status: "has-errors", file: read.name, issues: result.issues, notes: result.notes, message: "error を直してからやり直す（取り込み用のファイルは作っていない）" });
+        if (errors.length > 0 || !result.body) return json({ status: "has-errors", file: read.name, ...capIssues(result.issues), notes: result.notes, message: "error を直してからやり直す（取り込み用のファイルは作っていない）" });
         const text = (await call("writeEnvelope", [{ appId: read.file.appId, appName: read.file.appName }, result.body])) as string;
         const name = G.importFileName(plugin.name, read.file.appId);
         // 検査（kintone の読み取りを挟む）の間に設定ファイルが直されていないかを、置く直前に、設定ファイルのロックの中で確かめ直す
         const w = G.saveNewImportFileFor(workspace, read.name, read.digest, name, text);
         return json({
-          status: w.status, importFile: w.name, from: read.name, appId: read.file.appId, profile: used, issues: result.issues, notes: result.notes, warnings: w.warnings, evaluation: EVALUATION_NOTE,
+          status: w.status, importFile: w.name, from: read.name, appId: read.file.appId, profile: used, ...capIssues(result.issues), notes: result.notes, warnings: w.warnings, evaluation: EVALUATION_NOTE,
           nextSteps: nextSteps(plugin.name, w.name, read.file.appId, result.issues.some((x) => x.severity === "warning"), result.body)
         });
       } catch (e) {
@@ -437,9 +437,12 @@ export function createServer(opt: ServerOptions): McpServer {
             { ...(screens ? { screens } : {}), ...(fields ? { fields } : {}), ...(probes ? { probes } : {}) }
           );
           const issues = (Array.isArray(r.result.issues) ? r.result.issues : []) as G.GenericIssue[];
-          const base = { file: read.name, digest: read.digest, appId: read.file.appId, profile: k.def.profile, ...(r.from === "none" ? {} : { recordsFrom: r.from, recordCount: r.count }), ...(r.query ? { query: r.query } : {}), issues, notes: r.notes };
+          const base = { file: read.name, digest: read.digest, appId: read.file.appId, profile: k.def.profile, ...(r.from === "none" ? {} : { recordsFrom: r.from, recordCount: r.count }), ...(r.query ? { query: r.query } : {}), ...capIssues(issues), notes: r.notes };
           // 設定に止まる誤りがあるときは、レコードを読まずにここへ来る（中核が検査を先に通す）
-          if (issues.some((x) => x.severity === "error") || !Array.isArray(r.result.records)) return json({ status: "has-errors", ...base, message: "error を直してからやり直す（模擬していない。レコードも読んでいない）" });
+          if (issues.some((x) => x.severity === "error") || !Array.isArray(r.result.records)) {
+            // 設定の誤りなら、中核はレコードを読む前に止めている（from = none）。fields・probes・screens の誤りは、レコードを読んだ後にプラグインの API が返す
+            return json({ status: "has-errors", ...base, message: r.from === "none" ? "設定の error を直してからやり直す（模擬していない。レコードも読んでいない）" : "fields・probes・screens の指定を直してからやり直す（模擬の結果は返していない。レコードは読んだ）" });
+          }
           const { issues: _issues, ...rest } = r.result;
           // 結果は大きくなるので、字下げなしの JSON で返す。上限を超えたら返さずに、絞り方を伝える（AI が読み切れない大きさを返さない）
           const text = JSON.stringify({ status: "ok", ...base, ...rest, evaluation: TRY_NOTE });
@@ -464,6 +467,18 @@ export function createServer(opt: ServerOptions): McpServer {
 
 /** <頭>_try の結果の上限（字数）。行の多い設定・行の多いテーブルで膨らむので、超えたら絞ってもらう */
 export const TRY_MAX_CHARS = 60000;
+/** 1 回に返す指摘の数。超えたら、error を先にして先頭だけを返す（数は issuesTotal に。設定の行や条件が多いと、指摘だけで AI が読み切れない大きさになる） */
+export const ISSUES_MAX = 100;
+function capIssues(issues: G.GenericIssue[]): { issues: G.GenericIssue[]; issuesTotal?: { error: number; warning: number }; issuesNote?: string } {
+  if (issues.length <= ISSUES_MAX) return { issues };
+  const errors = issues.filter((x) => x.severity === "error");
+  const warnings = issues.filter((x) => x.severity !== "error");
+  return {
+    issues: [...errors, ...warnings].slice(0, ISSUES_MAX),
+    issuesTotal: { error: errors.length, warning: warnings.length },
+    issuesNote: `指摘が多いので、先頭の ${ISSUES_MAX} 件だけを返した（error が先）。全部で error ${errors.length} 件・warning ${warnings.length} 件。直してから検査し直すと、残りが出る`
+  };
+}
 const TRY_NOTE = "渡したレコードで、レコード画面と同じ順に式を評価した。今日の日付はツールを動かした日、ログインユーザーはツールの既定の利用者。画面の見え方（要素に書式が付くこと）までは確かめていない";
 
 /** 取り込み用のファイルを作った後に、利用者に伝えること（製品ごと。設定画面の言葉で書く） */
@@ -479,7 +494,7 @@ function nextSteps(plugin: string, file: string, appId: number, hasWarnings: boo
     return [
       head,
       `アプリ ${appId} の設定画面（アプリの設定 → プラグイン → 設定）を開き、「設定をアップロード」で ${file} を選びます。`,
-      "取り込み方を選びます。「全置換」は、項目の設定を全部ファイルの内容にします（ファイルに無い項目の設定は消えます）。「項目の置換」は、チェックした項目だけをファイルの内容にします（ほかの項目は今のまま）。今のアプリに無い項目は表に出て、取り込まれません。",
+      "取り込み方を選びます。**画面は最初「全置換」が選ばれています。** 「全置換」は、項目の設定を全部ファイルの内容にします（ファイルに無い項目の設定は消えます。消える数が画面に出ます）。今の設定を写して作ったファイルでなければ、「項目の置換」を選んでください。「項目の置換」は、チェックした項目だけをファイルの内容にします（ほかの項目は今のまま）。今のアプリに無い項目は表に出て、取り込まれません。",
       commonNote,
       "画面の内容を確かめて「保存する」を押します（「運用環境に反映」を入れておくと、保存と同時にアプリを更新します）。保存するまで、レコード画面の書式は変わりません。",
       "既存のレコードの値は変わりません。書式は、レコードを表示したときに条件の式で決まります。",

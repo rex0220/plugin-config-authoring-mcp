@@ -152,13 +152,16 @@ test("項目書式: 新しく作る → 検査で止まる → 直す → レコ
     assert.deepEqual(t4.probes.map((p) => [p.formula, p.field, p.total, p.samples.map((s) => s.value)]), [["状況", undefined, 2, ["未対応", "完了"]], ["数量*2", "数量", 2, ["24", "6"]]]);
     assert.deepEqual((await call("ffmt_try", { file: "ffmt-app300.json", ids: [1], probes: [{ formula: "1", field: "nothing" }] })).issues.map((x) => x.code), ["simulate.probes"]);
     assert.equal((await call("ffmt_try", { file: "ffmt-app300.json", query: '件名 = "無い"' })).status, "no-records");
+    // fields の誤りは、レコードを読んだ後に分かる（伝える文は「レコードは読んだ」）
+    const badFields = await call("ffmt_try", { file: "ffmt-app300.json", ids: [1], fields: ["無い項目"] });
+    assert.deepEqual([badFields.status, badFields.issues.map((x) => x.code), badFields.recordsFrom, /レコードは読んだ/.test(badFields.message)], ["has-errors", ["simulate.fields"], "ids", true]);
     // 渡し方の誤り
     assert.deepEqual([(await call("ffmt_try", { file: "ffmt-app300.json" })).status, (await call("ffmt_try", { file: "ffmt-app300.json", ids: [1], query: "" })).status, (await call("ffmt_try", { file: "ffmt-app300.json", query: "limit 5" })).status], ["invalid", "invalid", "invalid"]);
     assert.equal((await call("ffmt_try", { file: "ffmt-app300.json", ids: [99] })).status, "kintone-error");
     // 取り込み用のファイル: 共通の設定 + pluginInfos（派生値なし）。伝える文に取り込み方
     const ex = await call("ffmt_export", { file: "ffmt-app300.json", expectedDigest: fixed2.digest });
     assert.equal(ex.status, "saved");
-    assert.ok(ex.nextSteps.some((s) => /全置換/.test(s) && /項目の置換/.test(s)), ex.nextSteps.join("\n"));
+    assert.ok(ex.nextSteps.some((s) => /全置換/.test(s) && /項目の置換/.test(s) && /最初「全置換」が選ばれています/.test(s)), ex.nextSteps.join("\n"));
     // 新しく作った設定は、行の外の設定を持たない（取り込んでも、利用者の NOTE・説明・一覧別設定は今のまま）
     assert.ok(ex.nextSteps.some((s) => /共通の設定（一覧別設定・説明・NOTE・プラグイン有効・運用環境に反映）は入っていません/.test(s)), ex.nextSteps.join("\n"));
     const env = JSON.parse(readFileSync(path.join(d.ws, ex.importFile), "utf8"));
@@ -223,6 +226,22 @@ test("項目書式: 模擬の結果が大きすぎるときは返さずに、絞
     assert.deepEqual([all.status, all.size > all.limit, "records" in all, /fields で確かめる項目を絞る/.test(all.message)], ["too-large", true, false, true]);
     const few = await call("ffmt_try", { file: "big.json", records, fields: ["金額"], screens: ["detail"] });
     assert.deepEqual([few.status, few.records.length, few.records[0].screens.detail], ["ok", 20, { 金額: { label: 0, value: 1 } }]);
+    await close();
+  } finally { d.cleanup(); }
+});
+
+test("項目書式: 指摘が多いときは、error を先にして先頭の 100 件だけを返す（全部の数は issuesTotal）", { skip }, async () => {
+  const d = makeDirs();
+  const k = fakeKintone();
+  try {
+    const { call, close } = await connect("field-format", { PCA_WORKSPACE: d.ws, FIELD_FORMAT_PLUGIN_ZIP: ZIP, PCA_KINTONE_CONFIG: d.conn }, { fetch: k.fetch });
+    const made = await call("ffmt_new", { file: "many.json", app: 300 });
+    const tpl = (await call("ffmt_read", { file: "many.json", key: "new" })).row;
+    // 使っていない条件 300 個に、設定画面で入れられない色（warning）。最後に、使っている条件の誤り（error）を 1 つ
+    const value = [...Array.from({ length: 300 }, () => cond("", { state: false, color: "red" })), cond("1", { color: "red" })];
+    await call("ffmt_update", { file: "many.json", expectedDigest: made.digest, ops: [{ op: "addRow", row: { ...tpl, field: "金額", value } }] });
+    const c = await call("ffmt_check", { file: "many.json" });
+    assert.deepEqual([c.status, c.issues.length, c.issuesTotal, c.issues[0].severity, c.issues[0].label, /先頭の 100 件/.test(c.issuesNote)], ["has-errors", 100, { error: 1, warning: 300 }, "error", "301", true]);
     await close();
   } finally { d.cleanup(); }
 });
