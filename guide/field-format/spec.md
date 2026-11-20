@@ -111,7 +111,8 @@
 | テーブルの合計・行数（テーブルの外の項目の条件で） | `SUM(数量)>=10`、`COUNTROW(明細)=0` | |
 | 画面で分ける | `EV_INFO("mobile")`（モバイルなら真）、`EV_INFO("cate")="detail"`（詳細画面） | 一覧画面では `EV_INFO("type")` と `EV_INFO("cate")` は空の文字になる。詳細と一覧で分けるだけなら、行の `detail` / `list` を使う |
 
-- **使えない関数**: `UINFO` / `OINFO` / `GINFO` / `OUSERS` / `GUSERS`（項目書式はユーザー情報を読み込まない。検査で止まる）。値を書き換える関数（`FSET` / `BUTTON` / `DIALOG` など）も条件に書かない。
+- **使えない関数**: `UINFO` / `OINFO` / `GINFO` / `OUSERS` / `GUSERS`（項目書式はユーザー情報を読み込まない）、値を書き換える・画面を操作する関数 `FSET` / `FSET_TADD` / `BUTTON` / `DIALOG` / `CLIPBORD_WRITE` / `EV_SET`。どれも検査で止まる。
+- **式に書けない名前**: `constructor` / `toString` / `valueOf` / `hasOwnProperty` / `__proto__` など（検査で止まる）。この名前の項目コードは式で使えない。
 - テーブルの中の項目を、テーブルの外の項目の条件にそのまま書くと、**先頭の行の値**で評価される（`数量>=10` は 1 行目だけを見る）。テーブル全体を見るなら、`SUM(数量)` / `MAX(数量)` / `COUNTROW(明細)` / `CONTAINS(品名,"値")`（どれかの行にある）のような関数で書く。
 - 書いた式は、必ず `ffmt_try` で、真になるレコードとならないレコードを当てて確かめる。
 
@@ -127,6 +128,10 @@
 | `disabled.formula.*`（warning） | `state: false` の行の中の、式の誤り |
 | `color.format` / `fstyle.format` | 色が `#rrggbb` でない / 文字修飾が候補に無い |
 | `fsize.loose`（warning） | 文字サイズが設定画面で入れられる値でない（そのまま取り込めるが、設定画面では入れ直せない） |
+| `formula.sideEffect` | 値を書き換える・画面を操作する関数（`FSET` / `FSET_TADD` / `BUTTON` / `DIALOG` / `CLIPBORD_WRITE` / `EV_SET`）を書いた。書式の条件には書けない |
+| `formula.reserved` | `constructor` / `toString` / `valueOf` / `hasOwnProperty` / `__proto__` などの名前を式に書いた（計算式エンジンが項目コードと読み違え、誤りにならずに真になる）。文字列の中（`"constructor"`）は書ける |
+| `key.unknown` | 知らないキー（綴り違い）。`label` にキーの名前、`message` に書けるキーの一覧 |
+| `disabled.color.format` / `disabled.fstyle.format`（warning） | `state: false` の行・条件の色・文字修飾が、設定画面で入れられる値でない（そのまま取り込む。使うなら直す） |
 | `cond.array` / `cond.object` / `cond.boolean` / `cond.string` / `cond.rid` / `row.boolean` | 形の誤り |
 | `statusHistory.value` | ステータスの履歴に値の書式を書いた |
 | `row.noCond`（warning） | 行の `state` が `true` だが、有効な条件が無い |
@@ -140,6 +145,7 @@
 
 レコードを当てて、レコード画面と同じ順に式を評価した結果です。
 
+- `status: "too-large"` は、結果が大きすぎて返していない（60,000 字まで）。`fields` で項目を絞る、`screens` を 1 つにする、レコードを減らす。`status: "no-records"` は、条件に合うレコードが無い。設定に error があるときは `has-errors`（模擬していない。レコードも読んでいない）。
 - `records[]`: レコードごと。`id` はレコード番号。`screens` に画面ごとの答え（`detail` = PC の詳細、`print` = 印刷、`list` = PC の一覧、`mobileDetail`・`mobileList` = モバイル。省くと `detail` と `list`）。
   - 画面ごとの答えは `{ 項目コード: { "label": 番号, "value": 番号 } }`。**番号 = 選ばれた条件（1 始まり。0 = どれも付かない）**。`label` = ラベルの書式、`value` = 値の書式。
   - テーブルの行と子の値の書式は、行ごとの並び（`"value": [1, 0]` = 1 行目は条件 1、2 行目は付かない）。行が無ければ `value` は出ない。一覧の画面に `label` は無い。

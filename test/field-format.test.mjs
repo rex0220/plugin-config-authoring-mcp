@@ -5,7 +5,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -117,9 +117,11 @@ test("項目書式: 新しく作る → 検査で止まる → 直す → レコ
     assert.deepEqual(added.rows, [{ key: "01", state: true, name: "期限" }, { key: "02", state: true, name: "数量" }], "行の見出しは項目コード");
     const c1 = await call("ffmt_check", { file: "ffmt-app300.json" });
     assert.deepEqual([c1.status, c1.issues.map((x) => [x.code, x.rowKey, x.section, x.label])], ["has-errors", [["color.format", "01", "value", "1"]]]);
-    // 検査で止まる間は、模擬も取り込み用のファイルも作らない
+    // 検査で止まる間は、模擬も取り込み用のファイルも作らない。**レコードも読まない**
+    k.calls.length = 0;
     const t0 = await call("ffmt_try", { file: "ffmt-app300.json", ids: [1] });
-    assert.deepEqual([t0.status, t0.issues.map((x) => x.code), "records" in t0], ["has-errors", ["color.format"], false]);
+    assert.deepEqual([t0.status, t0.issues.map((x) => x.code), "records" in t0, "recordsFrom" in t0], ["has-errors", ["color.format"], false, false]);
+    assert.equal(k.calls.some((c) => c.api === "record" || c.api === "records"), false, "止まる設定ではレコードを読まない");
     assert.equal((await call("ffmt_export", { file: "ffmt-app300.json", expectedDigest: added.digest })).status, "has-errors");
     // 色を直す。式は検査を通る（文法は正しい）
     const row = (await call("ffmt_read", { file: "ffmt-app300.json", key: "01" })).row;
@@ -172,6 +174,55 @@ test("項目書式: 新しく作る → 検査で止まる → 直す → レコ
     assert.equal(ex2.status, "saved", JSON.stringify(ex2).slice(0, 300));
     assert.ok(ex2.nextSteps.some((s) => /共通の設定のうち 一覧別設定 が入っています/.test(s) && /チェックを外してください/.test(s)), ex2.nextSteps.join("\n"));
     assert.deepEqual(JSON.parse(readFileSync(path.join(d.ws, ex2.importFile), "utf8")).pluginListInfo, { all_enabled: false, views: { 5001: "一覧A" } });
+    await close();
+  } finally { d.cleanup(); }
+});
+
+test("別の製品の設定ファイルは読まない・直さない・取り込み用のファイルにしない（同じ作業フォルダーにアプリ集計と項目書式のファイルがあっても）", { skip: skip || (existsSync(AGG_ZIP) ? false : "アプリ集計の zip が無い") }, async () => {
+  const d = makeDirs();
+  const k = fakeKintone();
+  try {
+    const ff = await connect("field-format", { PCA_WORKSPACE: d.ws, FIELD_FORMAT_PLUGIN_ZIP: ZIP, PCA_KINTONE_CONFIG: d.conn }, { fetch: k.fetch });
+    const agg = await connect("aggregate", { PCA_WORKSPACE: d.ws, AGGREGATE_PLUGIN_ZIP: AGG_ZIP, PCA_KINTONE_CONFIG: d.conn }, { fetch: k.fetch });
+    const a = await agg.call("agg_new", { file: "agg.json", app: 300 });
+    const f = await ff.call("ffmt_new", { file: "ffmt.json", app: 300 });
+    assert.deepEqual([a.status, f.status], ["saved", "saved"]);
+    k.calls.length = 0;
+    // 項目書式のツールに、アプリ集計の設定ファイルを渡す（行が空なので、通ってしまうと「項目の設定が空」の取り込み用のファイルができる）
+    const denied = (r, what) => assert.deepEqual([r.status, r.code], ["invalid", "other-plugin"], `${what}: ${JSON.stringify(r).slice(0, 200)}`);
+    denied(await ff.call("ffmt_read", { file: "agg.json" }), "read");
+    denied(await ff.call("ffmt_check", { file: "agg.json" }), "check");
+    denied(await ff.call("ffmt_try", { file: "agg.json", ids: [1] }), "try");
+    denied(await ff.call("ffmt_export", { file: "agg.json", expectedDigest: a.digest }), "export");
+    denied(await ff.call("ffmt_update", { file: "agg.json", expectedDigest: a.digest, ops: [{ op: "patchCommon", patch: { pluginComment: "x" } }] }), "update");
+    denied(await ff.call("ffmt_diff", { before: "agg.json", after: "ffmt.json" }), "diff");
+    // 逆向きも
+    denied(await agg.call("agg_read", { file: "ffmt.json" }), "agg read");
+    denied(await agg.call("agg_export", { file: "ffmt.json", expectedDigest: f.digest }), "agg export");
+    denied(await agg.call("agg_update", { file: "ffmt.json", expectedDigest: f.digest, ops: [{ op: "patchCommon", patch: { pluginComment: "x" } }] }), "agg update");
+    assert.deepEqual(k.calls, [], "止めたときは kintone を読んでいない");
+    assert.equal(readdirSync(d.ws).some((n) => /-import\.json$/.test(n)), false, "取り込み用のファイルはできていない");
+    assert.deepEqual([(await agg.call("agg_read", { file: "agg.json" })).digest, (await ff.call("ffmt_read", { file: "ffmt.json" })).digest], [a.digest, f.digest], "どちらのファイルも変わっていない");
+    await ff.close();
+    await agg.close();
+  } finally { d.cleanup(); }
+});
+
+test("項目書式: 模擬の結果が大きすぎるときは返さずに、絞り方を伝える（fields で絞れば返る）", { skip }, async () => {
+  const d = makeDirs();
+  const k = fakeKintone();
+  // 行の多いテーブルのレコードを自分で書いて渡す（1 レコード 1,500 行 × 20 レコード）
+  const big = (id) => ({ $id: { type: "__ID__", value: String(id) }, 金額: { type: "NUMBER", value: "1" }, 明細: { type: "SUBTABLE", value: Array.from({ length: 1500 }, (_x, i) => ({ id: String(i + 1), value: { 数量: { type: "NUMBER", value: String(i) } } })) } });
+  try {
+    const { call, close } = await connect("field-format", { PCA_WORKSPACE: d.ws, FIELD_FORMAT_PLUGIN_ZIP: ZIP, PCA_KINTONE_CONFIG: d.conn }, { fetch: k.fetch });
+    const made = await call("ffmt_new", { file: "big.json", app: 300 });
+    const tpl = (await call("ffmt_read", { file: "big.json", key: "new" })).row;
+    await call("ffmt_update", { file: "big.json", expectedDigest: made.digest, ops: [{ op: "addRow", row: { ...tpl, field: "数量", value: [cond("数量>=10")] } }, { op: "addRow", row: { ...tpl, field: "金額", value: [cond("金額>0")] } }] });
+    const records = Array.from({ length: 20 }, (_x, i) => big(i + 1));
+    const all = await call("ffmt_try", { file: "big.json", records });
+    assert.deepEqual([all.status, all.size > all.limit, "records" in all, /fields で確かめる項目を絞る/.test(all.message)], ["too-large", true, false, true]);
+    const few = await call("ffmt_try", { file: "big.json", records, fields: ["金額"], screens: ["detail"] });
+    assert.deepEqual([few.status, few.records.length, few.records[0].screens.detail], ["ok", 20, { 金額: { label: 0, value: 1 } }]);
     await close();
   } finally { d.cleanup(); }
 });

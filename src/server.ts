@@ -56,7 +56,7 @@ class ProfileFixedError extends Error {}
 /** 誤りを、応答の形にする（種類の分かる誤りは status と code に。分からないものは文だけ） */
 function failure(e: unknown): ToolResult {
   if (e instanceof ProfileFixedError) return json({ status: "denied", code: "profile-fixed", message: e.message });
-  if (e instanceof G.GenericFileError) return json({ status: e.status, message: e.message });
+  if (e instanceof G.GenericFileError) return json({ status: e.status === "other-plugin" ? "invalid" : e.status, ...(e.status === "other-plugin" ? { code: "other-plugin" } : {}), message: e.message });
   if (e instanceof G.SourceError) return json({ status: "invalid", code: "source", message: e.message });
   if (e instanceof G.UnknownPluginError) return json({ status: "invalid", code: "plugin", message: e.message });
   if (e instanceof G.GenericCallError) {
@@ -275,7 +275,7 @@ export function createServer(opt: ServerOptions): McpServer {
     },
     async ({ file, key }) => {
       try {
-        const r = G.readSourceFile(workspace, file);
+        const r = G.readSourceFile(workspace, file, plugin.name);
         const base = { status: "ok", file: r.name, digest: r.digest, plugin: r.file.plugin, appId: r.file.appId, appName: r.file.appName };
         if (!key) return json({ ...base, rows: r.file.source.rows.map((x) => ({ key: x.key, state: x.state, name: rowName(x) })), summary: G.summarizeSource(r.file.source) });
         if (key === "common") return json({ ...base, common: r.file.source.common });
@@ -317,7 +317,7 @@ export function createServer(opt: ServerOptions): McpServer {
             else cur = G.patchCommon(cur, need(o.patch, "patch"));
           }
           return cur;
-        });
+        }, plugin.name);
         return json({ status: r.status, file: r.name, digest: r.digest, rows: r.after.rows.map((x) => ({ key: x.key, state: x.state, name: rowName(x) })), diff: G.renderDiff(G.diffSource(r.before, r.after)), warnings: r.warnings });
       } catch (e) {
         return failure(e);
@@ -335,8 +335,8 @@ export function createServer(opt: ServerOptions): McpServer {
     },
     async ({ before, after }) => {
       try {
-        const a = G.readSourceFile(workspace, before);
-        const b = G.readSourceFile(workspace, after);
+        const a = G.readSourceFile(workspace, before, plugin.name);
+        const b = G.readSourceFile(workspace, after, plugin.name);
         return json({ status: "ok", before: a.name, after: b.name, diff: G.renderDiff(G.diffSource(a.file.source, b.file.source)) });
       } catch (e) {
         return failure(e);
@@ -346,7 +346,7 @@ export function createServer(opt: ServerOptions): McpServer {
 
   /** 検査（kintone の項目定義を GET で読む） */
   const runCheck = async (file: string, profile: string | undefined): Promise<{ read: G.ReadSourceResult; result: G.GenericCheckResult; profile: string; guestSpaceId: number | null }> => {
-    const read = G.readSourceFile(workspace, file);
+    const read = G.readSourceFile(workspace, file, plugin.name);
     const k = kintone(profile);
     const result = await G.checkSource(k.clientFor, callFor(read.file.appId), read.file.source, { app: read.file.appId, ...(k.def.guestSpaceId ? { guestSpaceId: k.def.guestSpaceId } : {}) });
     return { read, result, profile: k.def.profile, guestSpaceId: k.def.guestSpaceId ?? null };
@@ -428,7 +428,7 @@ export function createServer(opt: ServerOptions): McpServer {
       },
       async ({ file, ids, query, records, screens, fields, probes, profile }) => {
         try {
-          const read = G.readSourceFile(workspace, file);
+          const read = G.readSourceFile(workspace, file, plugin.name);
           const k = kintone(profile);
           const r = await G.simulateSource(
             k.clientFor, callFor(read.file.appId), read.file.source,
@@ -437,11 +437,19 @@ export function createServer(opt: ServerOptions): McpServer {
             { ...(screens ? { screens } : {}), ...(fields ? { fields } : {}), ...(probes ? { probes } : {}) }
           );
           const issues = (Array.isArray(r.result.issues) ? r.result.issues : []) as G.GenericIssue[];
-          const base = { file: read.name, digest: read.digest, appId: read.file.appId, profile: k.def.profile, recordsFrom: r.from, recordCount: r.count, ...(r.query ? { query: r.query } : {}), issues, notes: r.notes };
-          if (issues.some((x) => x.severity === "error") || !Array.isArray(r.result.records)) return json({ status: "has-errors", ...base, message: "error を直してからやり直す（模擬していない）" });
+          const base = { file: read.name, digest: read.digest, appId: read.file.appId, profile: k.def.profile, ...(r.from === "none" ? {} : { recordsFrom: r.from, recordCount: r.count }), ...(r.query ? { query: r.query } : {}), issues, notes: r.notes };
+          // 設定に止まる誤りがあるときは、レコードを読まずにここへ来る（中核が検査を先に通す）
+          if (issues.some((x) => x.severity === "error") || !Array.isArray(r.result.records)) return json({ status: "has-errors", ...base, message: "error を直してからやり直す（模擬していない。レコードも読んでいない）" });
           const { issues: _issues, ...rest } = r.result;
-          // 結果は大きくなるので、字下げなしの JSON で返す
-          return { content: [{ type: "text", text: JSON.stringify({ status: "ok", ...base, ...rest, evaluation: TRY_NOTE }) }] };
+          // 結果は大きくなるので、字下げなしの JSON で返す。上限を超えたら返さずに、絞り方を伝える（AI が読み切れない大きさを返さない）
+          const text = JSON.stringify({ status: "ok", ...base, ...rest, evaluation: TRY_NOTE });
+          if (text.length > TRY_MAX_CHARS) {
+            return json({
+              status: "too-large", ...base, size: text.length, limit: TRY_MAX_CHARS,
+              message: `結果が大きすぎる（${text.length} 字。上限 ${TRY_MAX_CHARS} 字）。fields で確かめる項目を絞る、screens を 1 つにする、レコードを減らす、のどれかでやり直す`
+            });
+          }
+          return { content: [{ type: "text", text }] };
         } catch (e) {
           if (e instanceof G.GenericNoRecordsError) return json({ status: "no-records", message: e.message });
           if (e instanceof G.GenericSimulateError || e instanceof G.GenericQueryError) return json({ status: "invalid", code: "records", message: e.message });
@@ -454,6 +462,8 @@ export function createServer(opt: ServerOptions): McpServer {
   return server;
 }
 
+/** <頭>_try の結果の上限（字数）。行の多い設定・行の多いテーブルで膨らむので、超えたら絞ってもらう */
+export const TRY_MAX_CHARS = 60000;
 const TRY_NOTE = "渡したレコードで、レコード画面と同じ順に式を評価した。今日の日付はツールを動かした日、ログインユーザーはツールの既定の利用者。画面の見え方（要素に書式が付くこと）までは確かめていない";
 
 /** 取り込み用のファイルを作った後に、利用者に伝えること（製品ごと。設定画面の言葉で書く） */
