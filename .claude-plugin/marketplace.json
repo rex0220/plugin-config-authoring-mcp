@@ -1,0 +1,31 @@
+{
+  "name": "rex0220-plugin-authoring",
+  "description": "rex0220 の kintone プラグイン（項目書式）の設定を、Claude Code で作る・直す",
+  "owner": {
+    "name": "rex0220",
+    "url": "https://github.com/rex0220"
+  },
+  "plugins": [
+    {
+      "name": "field-format",
+      "description": "kintone の項目書式プラグイン（rex0220）の設定を、設定画面と同じ検査を通して作る・直す（ffmt_* のツールと、設定ファイルへの直接の書き込みを止めるフック）。kintone には読み取りだけ。取り込みと保存は利用者が設定画面で行う",
+      "author": {
+        "name": "rex0220"
+      },
+      "homepage": "https://github.com/rex0220/plugin-config-authoring-mcp",
+      "repository": "https://github.com/rex0220/plugin-config-authoring-mcp",
+      "license": "MIT",
+      "keywords": [
+        "kintone",
+        "項目書式",
+        "field-format",
+        "mcp"
+      ],
+      "source": {
+        "source": "archive",
+        "url": "https://github.com/rex0220/plugin-config-authoring-mcp/releases/download/v0.1.0/field-format-authoring-plugin-0.1.0.zip",
+        "sha256": "78c7f893dde3ac63fd9b5462127c2dd19cc06ae0d0af991d391f9ff6b976fd84"
+      }
+    }
+  ]
+}
