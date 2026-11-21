@@ -22,7 +22,12 @@
 - 式の評価に渡す文脈は自アプリの番号だけ。利用者・組織・グループの情報は渡さない（検査は式の形と使う項目だけで、値は使わない）。模擬（`<頭>_try`）もログインユーザーは中核の既定の利用者のまま（資料と結果の注記に書いてある。ログインユーザーに依る条件は画面で確かめてもらう）
 - 項目書式の取り込み用のファイルは保存値そのものではない（共通の設定 + `pluginInfos`。内部番号は設定画面が保存のときに作る）。**取り込み用のファイルを kintone の設定に直接書く道具を足さない**
 
-## 配布の形（Claude Code のプラグイン）
+## 配布の形（Claude Code のプラグインと Claude Desktop の .mcpb）
+
+- **配布する製品は `scripts/products.mjs` の `released`**（2026-11-22 Takashi「項目書式だけ」。アプリ集計は Ver.67 のリリースのときに true にする）。marketplace・リリース・記事に出すのは released の製品だけ。false の製品も、ビルド・試験・zip の検査は通す
+- marketplace の名前は `rex0220-plugin-authoring`（同日。公開の後は変えない）
+- **Claude Desktop の .mcpb は `scripts/build-mcpb.mjs`**（製品ごと。アイコンは `assets/icon-<製品>.png` = 白地に 1 文字、512×512。項目書式は「書」）。検査は `npm run verify:mcpb`（manifest のツールの並びが本体の tools/list と同じ、任意の設定を入れない形でも起動する）。Desktop にフックは無い
+- 利用者に見せる文で「レコードは読まない」と書くのは、模擬の無い製品だけ（`readsNote`。項目書式は `ffmt_try` が読む）。PRIVACY.md・SECURITY.md も同じ
 
 - 配るのは**製品ごとのプラグイン**（アプリ集計は `aggregate`）。`.claude-plugin/plugin.json` と `.mcp.json` はリポジトリに置かず、`scripts/products.mjs` が製品ごとに作る（名前・ツールの頭・zip の環境変数・扱う版は中核の表から取る。ここに書くのは利用者に見せる文だけ）
 - `npm run verify:plugin` = ビルド → `dist-plugin/<製品>-authoring-plugin-<版>.zip` と展開した形 `dist-plugin/<製品>/` → 検査。`dist-plugin/` はコミットしない

@@ -8,16 +8,26 @@ import { GENERIC_PLUGINS } from "@rex0220/formula-authoring-tools/generic";
 
 export const REPO_URL = "https://github.com/rex0220/plugin-config-authoring-mcp";
 export const AUTHOR = "rex0220";
-/** marketplace（.claude-plugin/marketplace.json）の名前。入れ方は /plugin install <製品>@<この名前>。**仮の名前**（公開の前に決める） */
-export const MARKETPLACE_NAME = "rex0220-kintone-authoring";
+/** marketplace（.claude-plugin/marketplace.json）の名前。入れ方は /plugin install <製品>@<この名前>（2026-11-22 Takashi。公開の後は変えない） */
+export const MARKETPLACE_NAME = "rex0220-plugin-authoring";
+/** プライバシーポリシーと問い合わせ先（plugin.json と .mcpb の manifest に書く。kintone に接続するので要る） */
+export const PRIVACY_URL = `${REPO_URL}/blob/main/PRIVACY.md`;
+export const SUPPORT_URL = `${REPO_URL}/issues`;
 
 /** 利用者に見せる文（製品ごと） */
 const TEXTS = {
+  // released: 配布する（marketplace とリリースに出す）か。kintone のプラグインの対応の版がリリースされてから true にする
+  // （アプリ集計は Ver.67 のリリースのときに。2026-11-22 Takashi「項目書式だけ」）。false でも、ビルド・試験・zip の検査は通す
+  // icon: Claude Desktop の拡張機能の一覧のアイコン（白地に 1 文字。無いと display_name の先頭の字になる）
   aggregate: {
-    keywords: ["kintone", "アプリ集計", "aggregate", "mcp"]
+    keywords: ["kintone", "アプリ集計", "aggregate", "mcp"],
+    released: false,
+    icon: null
   },
   "field-format": {
-    keywords: ["kintone", "項目書式", "field-format", "mcp"]
+    keywords: ["kintone", "項目書式", "field-format", "mcp"],
+    released: true,
+    icon: "assets/icon-field-format.png"
   }
 };
 
@@ -65,6 +75,9 @@ export function productMismatch(core = GENERIC_PLUGINS, texts = TEXTS) {
   ];
 }
 
+/** 配布する製品（marketplace・リリース・.mcpb）。**ここに無い製品を marketplace に並べない**（対応の版の zip を利用者が持てない） */
+export const releasedNames = () => productNames().filter((n) => TEXTS[n].released === true);
+
 export const zipName = (name, version) => `${name}-authoring-plugin-${version}.zip`;
 
 export const describe = (p) =>
@@ -82,6 +95,8 @@ export function pluginJson(name, version) {
     repository: REPO_URL,
     license: "MIT",
     keywords: p.keywords,
+    privacyPolicyUrl: PRIVACY_URL,
+    supportUrl: SUPPORT_URL,
     userConfig: {
       pluginZip: {
         type: "string",

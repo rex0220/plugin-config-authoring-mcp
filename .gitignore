@@ -6,3 +6,5 @@ dist-plugin/
 *.log
 .DS_Store
 .env
+dist-mcpb/
+*.mcpb

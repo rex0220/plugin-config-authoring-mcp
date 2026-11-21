@@ -4,13 +4,13 @@
 //   - 版は書かない（plugin.json の版が使われる。両方に書くと食い違いの警告）
 //   - archive の source では、入れる前に利用者に見えるのは marketplace の項目だけなので、説明・作者・配布元・ライセンス・キーワードを zip の中の plugin.json から写す
 //   - **リリースにファイルを置いてから**書き換えて push する（逆だと、入れられない時間ができる）。リポジトリが private の間は利用者が取れない
-// 使い方: npm run verify:plugin → リリースに zip を置く → node scripts/write-marketplace.mjs（dist-plugin/ の全部の製品の zip を読む）→ claude plugin validate .
+// 使い方: npm run verify:plugin → リリースに zip を置く → node scripts/write-marketplace.mjs（dist-plugin/ の、配布する製品の zip を読む）→ claude plugin validate .
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { outPath, VERSION } from "./build-plugin-zip.mjs";
-import { AUTHOR, MARKETPLACE_NAME, productNames, productOf, REPO_URL, zipName } from "./products.mjs";
+import { AUTHOR, MARKETPLACE_NAME, productOf, releasedNames, REPO_URL, zipName } from "./products.mjs";
 import { readZip } from "./zip.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -39,7 +39,8 @@ export function marketplace(items) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const items = productNames().map((name) => {
+  // 並べるのは配布する製品だけ（scripts/products.mjs の released）
+  const items = releasedNames().map((name) => {
     const file = outPath(name);
     if (!existsSync(file)) throw new Error(`zip が無い: ${file}（先に npm run verify:plugin）`);
     const zip = readFileSync(file);

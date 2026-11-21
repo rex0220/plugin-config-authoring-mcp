@@ -3,10 +3,25 @@
 rex0220 の kintone プラグイン（計算式エンジンを使うもの）の設定を、AI が作る・直す・検査するための MCP サーバーです。
 
 - **コードは 1 つ、名前は製品ごと**。起動のときに `--plugin <名前>` で製品を 1 つ決め、その製品の名前でツールを出します。
-- 今の対象は **アプリ集計**（`--plugin aggregate` → `agg_*`。Ver.67 以降）と **項目書式**（`--plugin field-format` → `ffmt_*`。Ver.16 以降）。
+- 配布しているのは **項目書式**（`--plugin field-format` → `ffmt_*`。Ver.16 以降）。**アプリ集計**（`--plugin aggregate` → `agg_*`。Ver.67 以降）はコードに入っているが、プラグインの Ver.67 のリリースまで配布していない。
 - **kintone には何も書きません。** 読むのは項目定義とアプリの名前（GET）。項目書式の `ffmt_try`（レコードを当てて確かめる）だけは、指定されたレコードも読みます（GET。読んだレコードそのものは返しません）。書くのは作業フォルダーのファイルだけで、設定画面への読み込みと保存は利用者が行います。
 
-設計と経緯は、非公開の作業記録（kintone-plugin の `work-link/plugin-authoring-plan.md`）にあります。
+## 入れ方
+
+**Claude Code**
+
+```
+/plugin marketplace add rex0220/plugin-config-authoring-mcp
+/plugin install field-format@rex0220-plugin-authoring
+```
+
+入れたら `/config` で、項目書式プラグインの zip と kintone の接続のファイルを絶対パスで指定し、Claude Code を起動し直します。
+
+**Claude Desktop**
+
+[リリースのページ](https://github.com/rex0220/plugin-config-authoring-mcp/releases)から `field-format-authoring-<版>.mcpb` をダウンロードしてダブルクリックし、拡張機能の設定で作業フォルダー・プラグインの zip・接続のファイルを指定します。
+
+どちらも、準備ができているかは `ffmt_status` で確かめられます（「項目書式の準備ができているか確かめて」と頼む）。プライバシーポリシーは [PRIVACY.md](PRIVACY.md)、守っていることと利用者に守ってほしいことは [SECURITY.md](SECURITY.md)、変更履歴は [CHANGELOG.md](CHANGELOG.md)。
 
 ## しくみ
 
@@ -64,9 +79,11 @@ rex0220 の kintone プラグイン（計算式エンジンを使うもの）の
 - 「契約の版」は、プラグインの zip の authoring API の形の版（plugin-config-kit の `AUTHORING_CONTRACT_VERSION`）。プラグインの版が上がっても、契約の版が同じなら MCP はそのまま使えます
 - 設定の検査と保存する値の組み立ては zip の中のコードが行うので、**アプリに入れたものと同じ版の zip** を指してください
 
-## Claude Code のプラグインとして配る形（製品ごと）
+## 配る形（製品ごと）
 
-コードは 1 つですが、配るものは**製品ごとのプラグイン**です（アプリ集計は `aggregate`。ツールは `agg_*`）。プラグインの定義（`.claude-plugin/plugin.json`）と起動の設定（`.mcp.json`）はリポジトリに置かず、`scripts/products.mjs` の表から製品ごとに作ります。
+コードは 1 つですが、配るものは**製品ごと**です（項目書式は `field-format`。ツールは `ffmt_*`）。配布する製品は `scripts/products.mjs` の `released` で決めます（marketplace とリリースに出すのは、kintone のプラグインの対応の版がリリースされた製品だけ）。形は 2 つ: Claude Code のプラグイン（zip）と、Claude Desktop の拡張機能（`.mcpb`）。
+
+### Claude Code のプラグインプラグインの定義（`.claude-plugin/plugin.json`）と起動の設定（`.mcp.json`）はリポジトリに置かず、`scripts/products.mjs` の表から製品ごとに作ります。
 
 | 入るもの | 中身 |
 |---|---|
@@ -97,7 +114,19 @@ claude plugin test .         # フックの試験（hooks/register.test.ts）
 claude --plugin-dir dist-plugin/aggregate   # 展開した形を、手元の Claude Code で試す
 ```
 
-フックの型を見るには `.claude-plugin/types/`（`claude-code` の型。git に入れない。kSQL アクションのオーサリングの同じフォルダーから写せる）が要ります。marketplace と Claude Desktop（.mcpb）はまだありません。
+フックの型を見るには `.claude-plugin/types/`（`claude-code` の型。git に入れない。kSQL アクションのオーサリングの同じフォルダーから写せる）が要ります。
+
+### Claude Desktop の拡張機能（.mcpb）
+
+`scripts/build-mcpb.mjs` が、同じ本体から製品ごとの `.mcpb` を作ります（`dist-mcpb/<製品>-authoring-<版>.mcpb`）。設定項目は、作業フォルダー（必須）・プラグインの zip（必須）・接続のファイル・使う profile。Desktop にフックはありません。
+
+```sh
+npm run verify:mcpb          # ビルド → .mcpb → 検査（展開して Desktop と同じ形で起動）
+```
+
+### marketplace とリリース
+
+リリースに製品ごとの zip と `.mcpb` を置いてから、`node scripts/write-marketplace.mjs` が `.claude-plugin/marketplace.json` を書きます（zip を sha256 で固定して指す）。
 
 ## 作り方と試験
 

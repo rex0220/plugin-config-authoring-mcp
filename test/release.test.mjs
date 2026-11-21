@@ -11,7 +11,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GENERIC_PLUGINS } from "@rex0220/formula-authoring-tools/generic";
 import { forbiddenReasons, realHosts, repoProblems } from "../scripts/forbidden-files.mjs";
-import { MARKETPLACE_NAME, mcpJson, pluginJson, productMismatch, productNames, productOf, readmeOf, REPO_URL, zipName } from "../scripts/products.mjs";
+import { MARKETPLACE_NAME, mcpJson, pluginJson, PRIVACY_URL, productMismatch, productNames, productOf, readmeOf, releasedNames, REPO_URL, SUPPORT_URL, zipName } from "../scripts/products.mjs";
+import { manifestOf, mcpbNames, MCPB_FILES } from "../scripts/build-mcpb.mjs";
 import { marketplace } from "../scripts/write-marketplace.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -37,6 +38,7 @@ test("製品ごとの定義: 中核の表にある製品だけを、製品の名
     const plugin = pluginJson(name, "1.2.3");
     assert.deepEqual([plugin.name, plugin.version], [name, "1.2.3"]);
     assert.ok(plugin.description.includes(core.title), "説明に製品の名前");
+    assert.deepEqual([plugin.privacyPolicyUrl, plugin.supportUrl], [PRIVACY_URL, SUPPORT_URL], "プライバシーポリシーと問い合わせ先");
     for (const [k, v] of Object.entries(plugin.userConfig)) {
       assert.ok(v.title.includes(core.title), `設定 ${k} の題に製品の名前`);
       assert.equal(v.required, false, "設定は後からでも入れられる（無ければ status が足りないものを言う）");
@@ -78,9 +80,14 @@ test("フック: モジュールがあり、設定ファイルの印が中核と
 
 test("marketplace: 製品ごとのプラグインを並べ、リリースの zip を sha256 で固定して指す（版は書かない）", () => {
   const sha256 = "0".repeat(64);
-  const m = marketplace(productNames().map((name) => ({ plugin: pluginJson(name, "1.2.3"), sha256 })));
+  // 並べるのは配布する製品だけ（対応の版がリリースされていない製品は出さない）
+  assert.deepEqual(releasedNames(), ["field-format"]);
+  assert.ok(releasedNames().every((n) => productNames().includes(n)));
+  const m = marketplace(releasedNames().map((name) => ({ plugin: pluginJson(name, "1.2.3"), sha256 })));
+  assert.equal(m.name, "rex0220-plugin-authoring");
   assert.equal(m.name, MARKETPLACE_NAME);
-  assert.deepEqual(m.plugins.map((p) => p.name), productNames());
+  assert.deepEqual(m.plugins.map((p) => p.name), releasedNames());
+  assert.ok(m.description.includes("項目書式") && !m.description.includes("アプリ集計"), "説明に出すのは配布する製品だけ");
   for (const p of m.plugins) {
     assert.deepEqual(p.source, { source: "archive", url: `${REPO_URL}/releases/download/v1.2.3/${p.name}-authoring-plugin-1.2.3.zip`, sha256 });
     assert.equal(p.version, undefined, "版は plugin.json だけに書く");
@@ -98,4 +105,24 @@ test("互換表（README）が中核の表と合う", () => {
     const cells = row.split("|").map((c) => c.trim());
     assert.deepEqual([cells[1], cells[2], cells[3], cells[4]], [`${core.title}（\`${name}\`）`, `\`${core.toolPrefix}_*\``, `Ver.${core.minPluginVersion} 以降`, core.contractVersions.join("、")]);
   }
+});
+
+test(".mcpb: 配布する製品は .mcpb を作れ、manifest が Claude Code のプラグインと同じ製品・同じ設定を指す", () => {
+  assert.ok(releasedNames().every((n) => mcpbNames().includes(n)), "配布する製品にはアイコンがある");
+  for (const name of mcpbNames()) {
+    const core = GENERIC_PLUGINS[name];
+    const m = manifestOf(name, "1.2.3");
+    assert.deepEqual([m.name, m.version], [`${name}-authoring`, "1.2.3"]);
+    assert.ok(m.display_name.includes(core.title));
+    assert.deepEqual(m.server.mcp_config.args, ["${__dirname}/server/index.cjs", "--plugin", name]);
+    assert.deepEqual(Object.keys(m.server.mcp_config.env).sort(), [core.zipEnv, "PCA_KINTONE_CONFIG", "PCA_KINTONE_PROFILE", "PCA_WORKSPACE"].sort());
+    for (const v of Object.values(m.server.mcp_config.env)) assert.ok(m.user_config[v.match(/^\$\{user_config\.(\w+)\}$/)?.[1]], `env の値は設定を指す: ${v}`);
+    assert.deepEqual(m.privacy_policies, [PRIVACY_URL]);
+    assert.equal(m.support, SUPPORT_URL);
+    assert.deepEqual(m.tools.map((t) => t.name.replace(`${core.toolPrefix}_`, "")), ["status", "docs", "files", "fields", "new", "read", "update", "diff", "check", "export", ...(core.simulate ? ["try"] : [])]);
+    assert.equal(m.description.includes("レコードは読まない"), core.simulate !== true);
+    assert.ok(existsSync(path.join(root, productOf(name).icon)), "アイコンのファイルがある");
+  }
+  assert.ok(MCPB_FILES.includes("manifest.json") && MCPB_FILES.includes("icon.png"));
+  for (const f of ["PRIVACY.md", "SECURITY.md", "CHANGELOG.md"]) assert.ok(existsSync(path.join(root, f)), `${f} がある`);
 });

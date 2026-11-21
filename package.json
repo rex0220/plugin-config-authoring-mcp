@@ -15,7 +15,9 @@
     "test": "node build.mjs && node --test --test-timeout=120000 \"test/**/*.test.mjs\"",
     "build:plugin": "node build.mjs && node scripts/build-plugin-zip.mjs",
     "verify:plugin": "node build.mjs && node scripts/build-plugin-zip.mjs && node scripts/plugin-zip-verify.mjs",
-    "forbidden": "node scripts/forbidden-files.mjs"
+    "forbidden": "node scripts/forbidden-files.mjs",
+    "build:mcpb": "node build.mjs && node scripts/build-mcpb.mjs",
+    "verify:mcpb": "node build.mjs && node scripts/build-mcpb.mjs && node scripts/mcpb-verify.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
