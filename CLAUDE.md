@@ -38,5 +38,5 @@
 
 ## ビルドと試験
 
-- 中核を直したら、先に `../formula-authoring/tools` で `npm run build`（`dist/generic.mjs` と `dist/generic-worker.mjs` を束ねている）
+- 中核は npm の公開版に固定（2026-11-22 から `0.7.0`。それまでは `file:../formula-authoring/tools`）。**まだ公開していない中核で試すときは、隣でビルドして `npm install --no-save ../formula-authoring/tools`**（`package.json` と lockfile は変えない。公開したら版を上げて `npm install --save-dev --save-exact`、`npm run notices`）
 - `npm run check`（本体とフックの型）→ `npm test`（ビルドしてから試験）→ `claude plugin test .`（フック）。試験の材料は隣の `aggregate/dist/aggregate-plugin67.zip`

@@ -136,7 +136,9 @@ npm run check
 npm test        # ビルドしてから試験（アプリ集計の zip が隣の aggregate/dist にあるとき）
 ```
 
-開発中は、中核を隣のリポジトリから読みます（`package.json` の `file:../formula-authoring/tools`。先にそちらで `npm run build`）。公開のときは、公開した中核の版に替えます。
+中核は npm の公開版を使います（`package.json` の `@rex0220/formula-authoring-tools`。版は固定）。まだ公開していない中核で試すときは、隣のリポジトリでビルドしてから `npm install --no-save ../formula-authoring/tools` で入れます（`package.json` と lockfile は変えない）。
+
+試験と配布物の検査は、kintone のプラグインの zip を使います（隣のフォルダーの `aggregate/dist/aggregate-plugin67.zip` と `field-format/dist/field-format-plugin16.zip`）。zip はこのリポジトリに入っていません。無いと、試験は zip を使う分を飛ばし、配布物の検査は止まります（検査は環境変数 `PCA_TEST_AGGREGATE_ZIP`・`PCA_TEST_FIELD_FORMAT_ZIP` でも指せます）。
 
 ## ライセンス
 

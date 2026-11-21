@@ -9,6 +9,7 @@ rex0220 のプラグインの設定のオーサリング（plugin-config-authori
 | パッケージ | 版 | ライセンス | 入る所 |
 | --- | --- | --- | --- |
 | @modelcontextprotocol/sdk | 1.32.2 | MIT | 本体 |
+| @rex0220/formula-authoring-tools | 0.7.0 | MIT | 本体、Worker |
 | ajv | 8.20.0 | MIT | 本体 |
 | ajv-formats | 3.0.1 | MIT | 本体 |
 | buffer-image-size | 0.6.4 | MIT | 本体、Worker |
@@ -18,7 +19,7 @@ rex0220 のプラグインの設定のオーサリング（plugin-config-authori
 | happy-dom | 20.14.5 | MIT | 本体、Worker |
 | json-schema-traverse | 1.0.0 | MIT | 本体 |
 | whatwg-mimetype | 3.0.0 | MIT | 本体、Worker |
-| ws | 8.22.0 | MIT | 本体、Worker |
+| ws | 8.23.0 | MIT | 本体、Worker |
 | zod | 3.25.76 | MIT | 本体 |
 | zod-to-json-schema | 3.25.2 | ISC | 本体 |
 | moment | 2.24.0 | MIT | dist/vendor/ |
@@ -59,6 +60,42 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+## @rex0220/formula-authoring-tools 0.7.0
+
+- ライセンス: MIT
+- 入手先: https://github.com/rex0220/formula-authoring
+- 入る所: 本体、Worker
+
+```text
+MIT License
+
+Copyright (c) 2026 rex0220
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+この tools は印刷屋プラグイン（rex0220 Print craft）の計算式エンジンと設定画面・帳票のコードを
+含みません。それらは利用者が持つ印刷屋プラグインの zip から実行時に読み込まれ、印刷屋プラグインの
+利用規約に従います。tools はそれらを複製・再配布しません。
 ```
 
 ## ajv 8.20.0
@@ -304,7 +341,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## ws 8.22.0
+## ws 8.23.0
 
 - ライセンス: MIT
 - 入手先: https://github.com/websockets/ws
