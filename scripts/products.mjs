@@ -29,8 +29,23 @@ export function productOf(name) {
   const core = GENERIC_PLUGINS[name];
   const text = TEXTS[name];
   if (!core || !text) throw new Error(`製品の定義が無い: ${name}（中核の表と scripts/products.mjs の TEXTS の両方に要る。ある名前: ${Object.keys(TEXTS).join(", ")}）`);
-  return { name: core.name, title: core.title, toolPrefix: core.toolPrefix, zipEnv: core.zipEnv, minPluginVersion: core.minPluginVersion, ...text };
+  return { name: core.name, title: core.title, toolPrefix: core.toolPrefix, zipEnv: core.zipEnv, minPluginVersion: core.minPluginVersion, simulate: core.simulate === true, ...text };
 }
+
+/**
+ * kintone を読むツールの名前（接続のファイルが無いと使えないもの）。模擬のある製品は <頭>_try も読む
+ * （自分で書いたレコードだけを当てるときも、項目定義は読む）
+ */
+export const kintoneTools = (p) => ["fields", "check", ...(p.simulate ? ["try"] : []), "export"].map((t) => `${p.toolPrefix}_${t}`).join(" / ");
+
+/**
+ * kintone から何を読むかの文。**模擬のある製品は、<頭>_try が指定されたレコードを読む**ので「レコードは読まない」と書かない
+ * （2026-11-22。項目書式の配布物の README が「レコードは読まない」のままだった）
+ */
+export const readsNote = (p) =>
+  p.simulate
+    ? `kintone には読み取り（GET）だけ。レコードを読むのは ${p.toolPrefix}_try（指定されたレコードを当てて確かめる）だけで、読んだレコードそのものは返さない`
+    : "kintone には読み取り（GET）だけで、レコードは読まない";
 
 /**
  * 配布する製品の名前。**中核の表とここの TEXTS は同じ製品を持つ**（片方だけに書くと、その製品がビルドと試験から黙って消える）ので、
@@ -77,7 +92,7 @@ export function pluginJson(name, version) {
       kintoneConfig: {
         type: "string",
         title: `${p.title}の設定づくりの接続のファイル（kintone）`,
-        description: `kSQL の ksql.config.json と同じ形のファイルの絶対パス（作業フォルダーの外に置く。kSQL と同じファイルでもよい）。空なら kintone を使うツール（${p.toolPrefix}_fields / ${p.toolPrefix}_check / ${p.toolPrefix}_export）は使えない`,
+        description: `kSQL の ksql.config.json と同じ形のファイルの絶対パス（作業フォルダーの外に置く。kSQL と同じファイルでもよい）。空なら kintone を使うツール（${kintoneTools(p)}）は使えない`,
         required: false
       },
       kintoneProfile: {
@@ -120,7 +135,7 @@ export function readmeOf(name, version, noticesFile) {
   const p = productOf(name);
   return `# ${p.name} ${version}（Claude Code のプラグイン）
 
-kintone の${p.title}プラグイン（rex0220。Ver.${p.minPluginVersion} 以降）の設定を、設定画面と同じ検査を通して作る・直す Claude Code のプラグイン（${p.toolPrefix}_* のツールと、設定ファイルへの直接の書き込みを止めるフック）。kintone には読み取り（GET）だけで、レコードは読まない。設定の取り込みと保存は利用者が kintone の設定画面で行う。
+kintone の${p.title}プラグイン（rex0220。Ver.${p.minPluginVersion} 以降）の設定を、設定画面と同じ検査を通して作る・直す Claude Code のプラグイン（${p.toolPrefix}_* のツールと、設定ファイルへの直接の書き込みを止めるフック）。${readsNote(p)}。設定の取り込みと保存は利用者が kintone の設定画面で行う。
 
 - 設定: \`/config\` で、${p.title}プラグインの zip と kintone の接続のファイル（本番の profile が同じファイルにあるなら、使う profile も）
 - 使い方: 「${p.title}の設定を作って」と頼む。手順と設定の形は ${p.toolPrefix}_docs、準備の状態は ${p.toolPrefix}_status

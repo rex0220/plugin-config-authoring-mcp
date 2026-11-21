@@ -11,7 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GENERIC_PLUGINS } from "@rex0220/formula-authoring-tools/generic";
 import { forbiddenReasons, realHosts, repoProblems } from "../scripts/forbidden-files.mjs";
-import { MARKETPLACE_NAME, mcpJson, pluginJson, productMismatch, productNames, productOf, REPO_URL, zipName } from "../scripts/products.mjs";
+import { MARKETPLACE_NAME, mcpJson, pluginJson, productMismatch, productNames, productOf, readmeOf, REPO_URL, zipName } from "../scripts/products.mjs";
 import { marketplace } from "../scripts/write-marketplace.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -47,7 +47,16 @@ test("製品ごとの定義: 中核の表にある製品だけを、製品の名
     assert.deepEqual(Object.keys(server.env), [core.zipEnv, "PCA_KINTONE_CONFIG", "PCA_KINTONE_PROFILE", "PCA_WORKSPACE"]);
     for (const v of Object.values(server.env)) assert.ok(plugin.userConfig[v.match(/^\$\{user_config\.(\w+)\}$/)?.[1]], `env の値は設定を指す: ${v}`);
     assert.equal(zipName(name, "1.2.3"), `${name}-authoring-plugin-1.2.3.zip`);
+    // レコードを読む製品（模擬あり）の配布物は「レコードは読まない」と書かない。接続が要るツールに <頭>_try を入れる
+    const readme = readmeOf(name, "1.2.3", "THIRD_PARTY_NOTICES.md");
+    const tryTool = `${core.toolPrefix}_try`;
+    assert.equal(p.simulate, core.simulate === true);
+    assert.equal(readme.includes("レコードは読まない"), !p.simulate, `${name}: README のレコードの文`);
+    assert.equal(readme.includes(tryTool), p.simulate, `${name}: README に ${tryTool}`);
+    assert.equal(plugin.userConfig.kintoneConfig.description.includes(tryTool), p.simulate, `${name}: 接続のファイルの説明に ${tryTool}`);
   }
+  assert.equal(productOf("field-format").simulate, true, "項目書式は模擬あり（レコードを読む）");
+  assert.equal(productOf("aggregate").simulate, false);
   assert.throws(() => productOf("formula"), /製品の定義が無い/);
   // 中核の表と配布の定義は同じ製品を持つ（片方だけに足すと、その製品が配布と試験から黙って消える）
   assert.deepEqual(productMismatch(), []);
