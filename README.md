@@ -15,7 +15,7 @@ rex0220 の kintone プラグイン（計算式エンジンを使うもの）の
 /plugin install field-format@rex0220-plugin-authoring
 ```
 
-入れたら `/config` で、項目書式プラグインの zip と kintone の接続のファイルを絶対パスで指定し、Claude Code を起動し直します。
+入れたら `/plugin configure field-format@rex0220-plugin-authoring` で、項目書式プラグインの zip と kintone の接続のファイルを絶対パスで指定し、Claude Code を起動し直します。
 
 **Claude Desktop**
 
