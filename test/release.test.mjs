@@ -119,7 +119,7 @@ test(".mcpb: 配布する製品は .mcpb を作れ、manifest が Claude Code �
     for (const v of Object.values(m.server.mcp_config.env)) assert.ok(m.user_config[v.match(/^\$\{user_config\.(\w+)\}$/)?.[1]], `env の値は設定を指す: ${v}`);
     assert.deepEqual(m.privacy_policies, [PRIVACY_URL]);
     assert.equal(m.support, SUPPORT_URL);
-    assert.deepEqual(m.tools.map((t) => t.name.replace(`${core.toolPrefix}_`, "")), ["status", "docs", "files", "fields", "new", "read", "update", "diff", "check", "export", ...(core.simulate ? ["try"] : [])]);
+    assert.deepEqual(m.tools.map((t) => t.name.replace(`${core.toolPrefix}_`, "")), ["status", "docs", "files", "fields", "new", "pull", "read", "update", "diff", "check", "export", ...(core.simulate ? ["try"] : [])]);
     assert.equal(m.description.includes("レコードは読まない"), core.simulate !== true);
     assert.ok(existsSync(path.join(root, productOf(name).icon)), "アイコンのファイルがある");
   }

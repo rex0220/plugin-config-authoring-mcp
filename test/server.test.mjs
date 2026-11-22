@@ -74,7 +74,7 @@ test("ツールの名前は製品の頭（agg_）で出る。指示に製品の�
   try {
     const { client, close } = await connect({ PCA_WORKSPACE: d.ws, AGGREGATE_PLUGIN_ZIP: ZIP });
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(tools, ["agg_check", "agg_diff", "agg_docs", "agg_export", "agg_fields", "agg_files", "agg_new", "agg_read", "agg_status", "agg_update"]);
+    assert.deepEqual(tools, ["agg_check", "agg_diff", "agg_docs", "agg_export", "agg_fields", "agg_files", "agg_new", "agg_pull", "agg_read", "agg_status", "agg_update"]);
     assert.match(client.getInstructions() ?? "", /アプリ集計/);
     assert.equal(client.getServerVersion().name, "aggregate");
     await close();

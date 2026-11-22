@@ -46,7 +46,7 @@ export function productOf(name) {
  * kintone を読むツールの名前（接続のファイルが無いと使えないもの）。模擬のある製品は <頭>_try も読む
  * （自分で書いたレコードだけを当てるときも、項目定義は読む）
  */
-export const kintoneTools = (p) => ["fields", "check", ...(p.simulate ? ["try"] : []), "export"].map((t) => `${p.toolPrefix}_${t}`).join(" / ");
+export const kintoneTools = (p) => ["fields", "pull", "check", ...(p.simulate ? ["try"] : []), "export"].map((t) => `${p.toolPrefix}_${t}`).join(" / ");
 
 /**
  * kintone から何を読むかの文。**模擬のある製品は、<頭>_try が指定されたレコードを読む**ので「レコードは読まない」と書かない
@@ -152,7 +152,7 @@ export function readmeOf(name, version, noticesFile) {
 
 kintone の${p.title}プラグイン（rex0220。Ver.${p.minPluginVersion} 以降）の設定を、設定画面と同じ検査を通して作る・直す Claude Code のプラグイン（${p.toolPrefix}_* のツールと、設定ファイルへの直接の書き込みを止めるフック）。${readsNote(p)}。設定の取り込みと保存は利用者が kintone の設定画面で行う。
 
-- 設定: \`/config\` で、${p.title}プラグインの zip と kintone の接続のファイル（本番の profile が同じファイルにあるなら、使う profile も）
+- 設定: \`/plugin configure ${p.name}@${MARKETPLACE_NAME}\` で、${p.title}プラグインの zip と kintone の接続のファイル（本番の profile が同じファイルにあるなら、使う profile も）
 - 使い方: 「${p.title}の設定を作って」と頼む。手順と設定の形は ${p.toolPrefix}_docs、準備の状態は ${p.toolPrefix}_status
 - リポジトリ: ${REPO_URL}
 - 同梱の依存の著作権表示とライセンス: ${noticesFile}

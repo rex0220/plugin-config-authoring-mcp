@@ -75,7 +75,7 @@ test("項目書式: ツールは ffmt_ で出て、模擬（ffmt_try）がある
   try {
     const { client, call, close } = await connect("field-format", { PCA_WORKSPACE: d.ws, FIELD_FORMAT_PLUGIN_ZIP: ZIP });
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(tools, ["ffmt_check", "ffmt_diff", "ffmt_docs", "ffmt_export", "ffmt_fields", "ffmt_files", "ffmt_new", "ffmt_read", "ffmt_status", "ffmt_try", "ffmt_update"]);
+    assert.deepEqual(tools, ["ffmt_check", "ffmt_diff", "ffmt_docs", "ffmt_export", "ffmt_fields", "ffmt_files", "ffmt_new", "ffmt_pull", "ffmt_read", "ffmt_status", "ffmt_try", "ffmt_update"]);
     assert.match(client.getInstructions() ?? "", /項目書式/);
     assert.match(client.getInstructions() ?? "", /ffmt_try で、レコードを当てて確かめる/);
     const s = await call("ffmt_status");

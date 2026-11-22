@@ -9,7 +9,7 @@ rex0220 のプラグインの設定のオーサリング（plugin-config-authori
 | パッケージ | 版 | ライセンス | 入る所 |
 | --- | --- | --- | --- |
 | @modelcontextprotocol/sdk | 1.32.2 | MIT | 本体 |
-| @rex0220/formula-authoring-tools | 0.7.0 | MIT | 本体、Worker |
+| @rex0220/formula-authoring-tools | 0.8.0 | MIT | 本体、Worker |
 | ajv | 8.20.0 | MIT | 本体 |
 | ajv-formats | 3.0.1 | MIT | 本体 |
 | buffer-image-size | 0.6.4 | MIT | 本体、Worker |
@@ -62,7 +62,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## @rex0220/formula-authoring-tools 0.7.0
+## @rex0220/formula-authoring-tools 0.8.0
 
 - ライセンス: MIT
 - 入手先: https://github.com/rex0220/formula-authoring
