@@ -23,8 +23,8 @@
       ],
       "source": {
         "source": "archive",
-        "url": "https://github.com/rex0220/plugin-config-authoring-mcp/releases/download/v0.1.0/field-format-authoring-plugin-0.1.0.zip",
-        "sha256": "78c7f893dde3ac63fd9b5462127c2dd19cc06ae0d0af991d391f9ff6b976fd84"
+        "url": "https://github.com/rex0220/plugin-config-authoring-mcp/releases/download/v0.2.0/field-format-authoring-plugin-0.2.0.zip",
+        "sha256": "05f15c4aa06f94a260475e69a3278cd9d76c00193c8e88b40441bbfa76f0a571"
       }
     }
   ]
