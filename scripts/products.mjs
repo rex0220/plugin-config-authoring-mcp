@@ -28,6 +28,12 @@ const TEXTS = {
     keywords: ["kintone", "項目書式", "field-format", "mcp"],
     released: true,
     icon: "assets/icon-field-format.png"
+  },
+  // 確認ダイアログは Ver.6 のリリースのときに true にする（アイコンもそのときに。白地に 1 文字）
+  "confirm-dialog": {
+    keywords: ["kintone", "確認ダイアログ", "confirm-dialog", "mcp"],
+    released: false,
+    icon: null
   }
 };
 

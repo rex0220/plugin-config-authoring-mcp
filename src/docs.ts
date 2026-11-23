@@ -16,6 +16,10 @@ export const DOC_LIST: Record<string, Array<{ key: string; title: string }>> = {
   "field-format": [
     { key: "howto", title: "作業手順（新しく作る・今の設定を直す・レコードを当てて確かめる・最後に伝えること）" },
     { key: "spec", title: "設定ファイルの書き方（項目の行・条件・色と文字・一覧別設定・式の書き方と落とし穴・検査の指摘・模擬の結果の読み方）" }
+  ],
+  "confirm-dialog": [
+    { key: "howto", title: "作業手順（新しく作る・今の設定を直す・レコードと場面を当てて確かめる・最後に伝えること）" },
+    { key: "spec", title: "設定ファイルの書き方（レコード画面での動き・行と対象イベント・ステップ・本文の HTML・行の外の設定・式の書き方と落とし穴・検査の指摘・模擬の結果の読み方）" }
   ]
 };
 

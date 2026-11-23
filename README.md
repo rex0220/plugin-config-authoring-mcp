@@ -3,7 +3,7 @@
 rex0220 の kintone プラグイン（計算式エンジンを使うもの）の設定を、AI が作る・直す・検査するための MCP サーバーです。
 
 - **コードは 1 つ、名前は製品ごと**。起動のときに `--plugin <名前>` で製品を 1 つ決め、その製品の名前でツールを出します。
-- 配布しているのは **項目書式**（`--plugin field-format` → `ffmt_*`。Ver.16 以降）。**アプリ集計**（`--plugin aggregate` → `agg_*`。Ver.67 以降）はコードに入っているが、プラグインの Ver.67 のリリースまで配布していない。
+- 配布しているのは **項目書式**（`--plugin field-format` → `ffmt_*`。Ver.16 以降）。**アプリ集計**（`--plugin aggregate` → `agg_*`。Ver.67 以降）と**確認ダイアログ**（`--plugin confirm-dialog` → `cdlg_*`。Ver.6 以降）はコードに入っているが、それぞれのプラグインの版のリリースまで配布していない。
 - **kintone には何も書きません。** 読むのは項目定義とアプリの名前、`<頭>_pull` を呼んだときはアプリに保存されているそのプラグインの設定（どれも GET）。項目書式の `ffmt_try`（レコードを当てて確かめる）だけは、指定されたレコードも読みます（GET。読んだレコードそのものは返しません）。書くのは作業フォルダーのファイルだけで、設定画面への読み込みと保存は利用者が行います。
 
 ## 入れ方
@@ -75,6 +75,7 @@ rex0220 の kintone プラグイン（計算式エンジンを使うもの）の
 |---|---|---|---|---|
 | アプリ集計（`aggregate`） | `agg_*` | Ver.67 以降 | 1 | 0.1.0〜 |
 | 項目書式（`field-format`） | `ffmt_*` | Ver.16 以降 | 1 | 0.1.0〜 |
+| 確認ダイアログ（`confirm-dialog`） | `cdlg_*` | Ver.6 以降 | 1 | 0.3.0〜（未配布） |
 
 - 条件は中核の表（`@rex0220/formula-authoring-tools/generic` の `GENERIC_PLUGINS`）が持ち、起動のたびに zip を確かめます（版が古い = `unsupported-version`、authoring API が無い = `no-api`、契約の版が合わない = `api-unsupported`、署名が合わない = `bad-signature`）。結果は `<頭>_status` に出ます
 - 「契約の版」は、プラグインの zip の authoring API の形の版（plugin-config-kit の `AUTHORING_CONTRACT_VERSION`）。プラグインの版が上がっても、契約の版が同じなら MCP はそのまま使えます

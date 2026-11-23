@@ -4,14 +4,15 @@
 
 ## 作り
 
-- **コードは 1 つ、名前は製品ごと**（`--plugin aggregate` → `agg_*`）。ツールを足すときは `src/server.ts` に 1 回書けば、全部の製品に出る。製品の名前を条件にした分岐は、最後に伝える文（`nextSteps`）と資料だけにする
+- **コードは 1 つ、名前は製品ごと**（`--plugin aggregate` → `agg_*`）。ツールを足すときは `src/server.ts` に 1 回書けば、全部の製品に出る。製品の名前を条件にした分岐は、最後に伝える文（`nextSteps`）と資料だけにする。**`<頭>_try` の入力と説明は製品ごとの定義**（`src/try-defs.ts`。2026-11-23 Takashi。模擬の入力と答えは契約の版 1 では自由な JSON なので、AI に見せる形と上限をここに書く。レコードの渡し方・検査を先に通す・結果の上限・読んだレコードを返さない、は `server.ts` の共通の所）
 - プラグインの決まり（何が誤りか・保存値の作り方）は**ここに書かない**。プラグインの zip の authoring API が持つ（設定画面と同じ関数）。ここが持つのは、ファイルの操作と、資料
 - 中核は `@rex0220/formula-authoring-tools/generic`（`../formula-authoring/tools/src/generic/`）。zip の読み取り・Worker・設定ファイルの操作・項目定義の取得はそちら
-- 製品を足すとき: ① プラグインの zip に authoring API を載せる（kit の契約）② 中核の表（`registry.ts`）に 1 行 ③ `guide/<製品>/` に資料（`howto.md`・`spec.md`）と `src/docs.ts` の `DOC_LIST` ④ `nextSteps` に製品の文（取り込み方が「全部入れ替え」でない製品は、設定画面の言葉で書き分ける。項目書式は 全置換 / 項目の置換 と「共通の設定」の群）⑤ `scripts/products.mjs` の `TEXTS` に検索の語、`scripts/plugin-zip-verify.mjs` の `TEST_ZIPS` に試験の zip
+- 製品を足すとき: ① プラグインの zip に authoring API を載せる（kit の契約）② 中核の表（`registry.ts`）に 1 行 ③ `guide/<製品>/` に資料（`howto.md`・`spec.md`）と `src/docs.ts` の `DOC_LIST` ④ `nextSteps` に製品の文（取り込み方が「全部入れ替え」でない製品は、設定画面の言葉で書き分ける。項目書式は 全置換 / 項目の置換 と「共通の設定」の群）⑤ `scripts/products.mjs` の `TEXTS` に検索の語、`scripts/plugin-zip-verify.mjs` と `mcpb-verify.mjs` の `TEST_ZIPS` に試験の zip ⑥ 模擬のある製品は `src/try-defs.ts` に 1 つ（無いと起動で止まる）⑦ README の互換表。配布するとき（`released: true`）は、アイコンと、README・PRIVACY.md・SECURITY.md の「何を読むか」の文も
 
 ## 守ること
 
-- kintone へは GET だけ。レコードを読むのは、模擬のある製品（中核の表の `simulate`。今は項目書式）の `<頭>_try` だけ（2026-11-20。番号か条件で指定されたものを 20 件まで）。**読んだレコードそのものは返さない**（プラグインの API に渡し、返すのは選ばれた条件の番号と、式の結果の例）。秘密の値・接続のファイルの場所と中身は返さない
+- **プロセス管理の設定を読むのは、中核の表に `status` の印のある製品（確認ダイアログ）だけ**（動作テスト環境の GET。`<頭>_fields` の `preview: true`・検査・模擬）。印の無い製品では読まない（`test/confirm-dialog.test.mjs` が、項目書式の検査で読まないことを見る）
+- kintone へは GET だけ。レコードを読むのは、模擬のある製品（中核の表の `simulate`。項目書式と確認ダイアログ）の `<頭>_try` だけ（2026-11-20。番号か条件で指定されたものを 20 件まで）。**読んだレコードそのものは返さない**（プラグインの API に渡し、返すのは選ばれた条件の番号と、式の結果の例）。秘密の値・接続のファイルの場所と中身は返さない
 - **設定ファイルを読む・直す入口には、起動した製品の名前を渡す**（`G.readSourceFile(workspace, file, plugin.name)`・`G.updateSourceFile(…, plugin.name)`）。設定ファイルの形はどの製品も `{ common, rows }` なので、渡さないと別の製品のファイルを読めてしまい、空の設定の取り込み用のファイルを作れる（2026-11-20 Codex BLOCKER。`test/field-format.test.mjs` が両方向を見る）
 - `<頭>_try` の結果は 60,000 字まで（`TRY_MAX_CHARS`）。超えたら `too-large` で、絞り方を返す。設定に error があるときは、中核が検査を先に通すので、レコードを読まない
 - **アプリの今の設定を読む（`<頭>_pull`。0.2.0）**: kintone の API ラボの GET（中核の `fetchStoredConfig`）。保存値をほどくのは中核、**読み方（スキーマ・元の値への変換）は zip の `toSource`**。ほどいた保存値そのもの（更新者の名前・最終更新が入っている）は返さない・置かない。API を呼べないときは `hint` で「設定をダウンロード」を案内する（API ラボは共通管理者が有効にした環境だけ）。プラグインの設定を**変更する** API は呼ばない
@@ -39,5 +40,5 @@
 
 ## ビルドと試験
 
-- 中核は npm の公開版に固定（2026-11-22 から。0.1.0 は `0.7.0`、0.2.0 は `0.8.0`。それまでは `file:../formula-authoring/tools`）。**まだ公開していない中核で試すときは、隣でビルドして `npm install --no-save ../formula-authoring/tools`**（`package.json` と lockfile は変えない。公開したら版を上げて `npm install --save-dev --save-exact`、`npm run notices`）
+- 中核は npm の公開版に固定（2026-11-22 から。0.1.0 は `0.7.0`、0.2.0 は `0.8.0`、確認ダイアログを足した版〈0.3.0 の予定。未公開〉は `0.9.0`。それまでは `file:../formula-authoring/tools`）。**まだ公開していない中核で試すときは、隣でビルドして `npm install --no-save ../formula-authoring/tools`**（`package.json` と lockfile は変えない。公開したら版を上げて `npm install --save-dev --save-exact`、`npm run notices`）
 - `npm run check`（本体とフックの型）→ `npm test`（ビルドしてから試験）→ `claude plugin test .`（フック）。試験の材料は隣の `aggregate/dist/aggregate-plugin67.zip`

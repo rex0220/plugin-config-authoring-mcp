@@ -22,7 +22,7 @@ import { readZip } from "./zip.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TEST_TOKEN = "TEST-not-a-real-token-0123456789"; // 本物の資格情報は使わない
 /** 試験に使う kintone のプラグインの zip（隣のリポジトリのビルドしたもの） */
-const TEST_ZIPS = { aggregate: "../aggregate/dist/aggregate-plugin67.zip", "field-format": "../field-format/dist/field-format-plugin16.zip" };
+const TEST_ZIPS = { aggregate: "../aggregate/dist/aggregate-plugin67.zip", "field-format": "../field-format/dist/field-format-plugin16.zip", "confirm-dialog": "../confirm-dialog/dist/confirm-dialog-plugin6.zip" };
 const envName = (name) => `PCA_TEST_${name.toUpperCase().replace(/-/g, "_")}_ZIP`;
 
 function assert(cond, message) {
